@@ -7,7 +7,14 @@ import { config } from '../config';
 import { stepPhysics } from './physics';
 import { rectsOverlap } from './collision';
 import { applyGrazes, stepDecay } from './scoring';
-import { useObstaclePool, type ObstacleSlot } from './useObstaclePool';
+import {
+  pinchSpurs,
+  placeRock,
+  sizeScaleAt,
+  type OccupiedRect,
+} from './spawning';
+import { useRockPool, type RockSlot } from './useRockPool';
+import { usePinchPool, type PinchSlot } from './usePinchPool';
 
 /** Fixed physics timestep (s). Physics only ever advances in these increments. */
 const FIXED_DT = 1 / config.engine.physicsHz;
@@ -23,8 +30,10 @@ export interface GameLoop {
   renderScrollX: SharedValue<number>;
   /** Raw scroll distance (shu) — run distance for the counter/overlay. */
   scrollX: SharedValue<number>;
-  /** Input flag — true while the player is touching the screen. */
-  thrusting: SharedValue<boolean>;
+  /** Simulated helicopter centre (shu) — the steering grab anchor. */
+  posY: SharedValue<number>;
+  /** Altitude the helicopter spring-chases. Set by the drag gesture. */
+  targetY: SharedValue<number>;
   /** PHASE_PLAYING | PHASE_DEAD. */
   phase: SharedValue<number>;
   /** Banked score. Monotonic within a run — it can never decrease. */
@@ -39,8 +48,9 @@ export interface GameLoop {
   wallClockMs: SharedValue<number>;
   /** wallClockMs at the moment of death (retry lockout reference). */
   deathAtMs: SharedValue<number>;
-  /** The pooled obstacles, for rendering. */
-  slots: ObstacleSlot[];
+  /** Pooled world objects, for rendering. */
+  rocks: RockSlot[];
+  pinches: PinchSlot[];
   /** Worklet: reset every run-scoped value and start a fresh run. */
   resetRun: () => void;
 }
@@ -59,51 +69,111 @@ export function useGameLoop(aspectRatio: number): GameLoop {
   const posY = useSharedValue<number>(config.helicopter.startYRatio);
   const velY = useSharedValue(0);
   const prevPosY = useSharedValue<number>(config.helicopter.startYRatio);
+  const targetY = useSharedValue<number>(config.helicopter.startYRatio);
   const scrollX = useSharedValue(0);
   const prevScrollX = useSharedValue(0);
   const accumulator = useSharedValue(0);
-  const thrusting = useSharedValue(false);
   const renderY = useSharedValue<number>(config.helicopter.startYRatio);
   const renderScrollX = useSharedValue(0);
 
   const phase = useSharedValue(PHASE_PLAYING);
   const wallClockMs = useSharedValue(0);
   const deathAtMs = useSharedValue(0);
-  const spawnTimer = useSharedValue<number>(
-    config.obstacles.spawnIntervalBase - config.obstacles.firstSpawnDelaySeconds,
+
+  /** Run time (s) — drives the size ramp and the pinch schedule. */
+  const elapsed = useSharedValue(0);
+  const nextRockAt = useSharedValue<number>(
+    config.obstacles.firstSpawnDelaySeconds,
   );
+  const nextPinchAt = useSharedValue<number>(config.pinch.firstAtSeconds);
 
   const score = useSharedValue(0);
   const tierIndex = useSharedValue(0);
   const decayTimer = useSharedValue(0);
   const decayThreshold = useSharedValue<number>(config.graze.decaySeconds);
 
-  const slots = useObstaclePool();
+  const rocks = useRockPool();
+  const pinches = usePinchPool();
 
-  const spawnObstacle = (scroll: number) => {
+  const spawnPinch = (scroll: number, now: number) => {
     'worklet';
-    const { gapSizeBase, gapPositionJitter, width, minRockLength } =
-      config.obstacles;
-    const wall = config.world.wallThickness;
-    const halfGap = gapSizeBase / 2;
+    for (let i = 0; i < pinches.length; i++) {
+      const p = pinches[i];
+      if (p.active.value === 0) {
+        const spurs = pinchSpurs(now, Math.random);
+        p.worldX.value = scroll + aspectRatio;
+        p.length.value = config.pinch.lengthShu;
+        p.topLen.value = spurs.topLen;
+        p.botLen.value = spurs.botLen;
+        p.cleared.value = 0;
+        p.armedTop.value = 0;
+        p.armedBottom.value = 0;
+        p.active.value = 1;
+        return;
+      }
+    }
+  };
 
-    // Keep both rocks at least minRockLength long inside the walls.
-    const minCentre = wall + minRockLength + halfGap;
-    const maxCentre = 1 - wall - minRockLength - halfGap;
-    let centre = 0.5 + (Math.random() * 2 - 1) * gapPositionJitter;
-    if (centre < minCentre) centre = minCentre;
-    if (centre > maxCentre) centre = maxCentre;
+  const spawnRock = (scroll: number, now: number) => {
+    'worklet';
+    const { baseWidth, baseHeight, sizeJitter } = config.obstacles;
+    const scale = sizeScaleAt(now);
+    const halfW =
+      (baseWidth / 2) * scale * (1 + (Math.random() * 2 - 1) * sizeJitter);
+    const halfH =
+      (baseHeight / 2) * scale * (1 + (Math.random() * 2 - 1) * sizeJitter);
+    const centreX = scroll + aspectRatio + halfW;
 
-    for (let i = 0; i < slots.length; i++) {
-      const slot = slots[i];
-      if (slot.active.value === 0) {
-        slot.topLen.value = centre - halfGap;
-        slot.botLen.value = 1 - (centre + halfGap);
-        slot.worldX.value = scroll + aspectRatio + width / 2;
-        slot.cleared.value = 0;
-        slot.armedTop.value = 0;
-        slot.armedBottom.value = 0;
-        slot.active.value = 1;
+    // Pinches own their stretch of tunnel — no rocks inside a span.
+    const margin = config.pinch.rockFreeMargin;
+    for (let i = 0; i < pinches.length; i++) {
+      const p = pinches[i];
+      if (p.active.value === 0) continue;
+      const px1 = p.worldX.value - margin;
+      const px2 = p.worldX.value + p.length.value + margin;
+      if (centreX + halfW > px1 && centreX - halfW < px2) return;
+    }
+
+    // Everything currently blocking the tunnel, for the corridor guarantee.
+    const occupied: OccupiedRect[] = [];
+    for (let i = 0; i < rocks.length; i++) {
+      const r = rocks[i];
+      if (r.active.value === 0) continue;
+      occupied.push({
+        x1: r.worldX.value - r.halfW.value,
+        x2: r.worldX.value + r.halfW.value,
+        y1: r.centerY.value - r.halfH.value,
+        y2: r.centerY.value + r.halfH.value,
+      });
+    }
+    for (let i = 0; i < pinches.length; i++) {
+      const p = pinches[i];
+      if (p.active.value === 0) continue;
+      const px1 = p.worldX.value;
+      const px2 = p.worldX.value + p.length.value;
+      occupied.push({ x1: px1, x2: px2, y1: 0, y2: p.topLen.value });
+      occupied.push({ x1: px1, x2: px2, y1: 1 - p.botLen.value, y2: 1 });
+    }
+
+    const y = placeRock(
+      centreX - halfW,
+      centreX + halfW,
+      halfH,
+      occupied,
+      Math.random,
+    );
+    if (y === null) return; // never seal the tunnel — skip instead
+
+    for (let i = 0; i < rocks.length; i++) {
+      const r = rocks[i];
+      if (r.active.value === 0) {
+        r.worldX.value = centreX;
+        r.centerY.value = y;
+        r.halfW.value = halfW;
+        r.halfH.value = halfH;
+        r.cleared.value = 0;
+        r.armed.value = 0;
+        r.active.value = 1;
         return;
       }
     }
@@ -114,16 +184,20 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     posY.value = config.helicopter.startYRatio;
     velY.value = 0;
     prevPosY.value = config.helicopter.startYRatio;
+    targetY.value = config.helicopter.startYRatio;
     scrollX.value = 0;
     prevScrollX.value = 0;
     accumulator.value = 0;
     renderY.value = config.helicopter.startYRatio;
     renderScrollX.value = 0;
-    spawnTimer.value =
-      config.obstacles.spawnIntervalBase -
-      config.obstacles.firstSpawnDelaySeconds;
-    for (let i = 0; i < slots.length; i++) {
-      slots[i].active.value = 0;
+    elapsed.value = 0;
+    nextRockAt.value = config.obstacles.firstSpawnDelaySeconds;
+    nextPinchAt.value = config.pinch.firstAtSeconds;
+    for (let i = 0; i < rocks.length; i++) {
+      rocks[i].active.value = 0;
+    }
+    for (let i = 0; i < pinches.length; i++) {
+      pinches[i].active.value = 0;
     }
     score.value = 0;
     tierIndex.value = 0;
@@ -148,7 +222,7 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     let scroll = scrollX.value;
     let prevPos = prevPosY.value;
     let prevScroll = prevScrollX.value;
-    let timer = spawnTimer.value;
+    let now = elapsed.value;
     let runScore = score.value;
     let tier = tierIndex.value;
     let dTimer = decayTimer.value;
@@ -160,7 +234,6 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     const hbHeight = config.helicopter.spriteSize.height * config.helicopter.hitboxScale;
     const heliCentreX = aspectRatio * config.helicopter.fixedXRatio;
     const hbLeft = heliCentreX - hbWidth / 2;
-    const rockWidth = config.obstacles.width;
     const wall = config.world.wallThickness;
     const grazeDist = config.graze.grazeDistance;
     const tiers = config.graze.multiplierTiers;
@@ -168,17 +241,28 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     while (acc >= FIXED_DT) {
       prevPos = pos;
       prevScroll = scroll;
-      const next = stepPhysics(pos, vel, thrusting.value, FIXED_DT);
+      const next = stepPhysics(pos, vel, targetY.value, FIXED_DT);
       pos = next.posY;
       vel = next.velY;
       scroll += config.world.baseScrollSpeed * FIXED_DT;
+      now += FIXED_DT;
       acc -= FIXED_DT;
 
-      // Spawning — interval-based, from the fixed timestep so it's exact.
-      timer += FIXED_DT;
-      if (timer >= config.obstacles.spawnIntervalBase) {
-        timer -= config.obstacles.spawnIntervalBase;
-        spawnObstacle(scroll);
+      // Spawning — absolute-time schedules with jittered rescheduling.
+      if (now >= nextRockAt.value) {
+        const { spawnIntervalBase, spawnIntervalJitter } = config.obstacles;
+        nextRockAt.value =
+          now +
+          spawnIntervalBase *
+            (1 + (Math.random() * 2 - 1) * spawnIntervalJitter);
+        spawnRock(scroll, now);
+      }
+      if (now >= nextPinchAt.value) {
+        const { intervalSeconds, intervalJitter } = config.pinch;
+        nextPinchAt.value =
+          now +
+          intervalSeconds * (1 + (Math.random() * 2 - 1) * intervalJitter);
+        spawnPinch(scroll, now);
       }
 
       const hbTop = pos - hbHeight / 2;
@@ -188,50 +272,90 @@ export function useGameLoop(aspectRatio: number): GameLoop {
         died = true;
       }
 
-      // Obstacles: collide, arm grazes, then bank them as rocks are cleared.
-      for (let i = 0; i < slots.length; i++) {
-        const slot = slots[i];
-        if (slot.active.value === 0) continue;
-        const screenX = slot.worldX.value - scroll;
-        const rockLeft = screenX - rockWidth / 2;
-        const topLen = slot.topLen.value;
-        const botLen = slot.botLen.value;
+      // Rocks: collide, arm grazes, bank on clear, release off-screen slots.
+      for (let i = 0; i < rocks.length; i++) {
+        const rock = rocks[i];
+        if (rock.active.value === 0) continue;
+        const screenX = rock.worldX.value - scroll;
+        const halfW = rock.halfW.value;
+        const halfH = rock.halfH.value;
+        const left = screenX - halfW;
+        const top = rock.centerY.value - halfH;
 
         if (!died) {
           if (
-            rectsOverlap(hbLeft, hbTop, hbWidth, hbHeight, rockLeft, 0, rockWidth, topLen) ||
-            rectsOverlap(hbLeft, hbTop, hbWidth, hbHeight, rockLeft, 1 - botLen, rockWidth, botLen)
+            rectsOverlap(hbLeft, hbTop, hbWidth, hbHeight, left, top, 2 * halfW, 2 * halfH)
           ) {
             died = true;
-          } else if (!slot.cleared.value) {
-            // Graze arming: hitbox inside a rock's band (rock inflated by
-            // grazeDistance) without touching it. Banks when the rock clears.
+          } else if (
+            !rock.cleared.value &&
+            rock.armed.value === 0 &&
+            rectsOverlap(
+              hbLeft, hbTop, hbWidth, hbHeight,
+              left - grazeDist, top - grazeDist,
+              2 * halfW + 2 * grazeDist, 2 * halfH + 2 * grazeDist,
+            )
+          ) {
+            rock.armed.value = 1;
+          }
+        }
+
+        if (!rock.cleared.value && screenX + halfW < hbLeft) {
+          rock.cleared.value = 1;
+          if (rock.armed.value === 1 && !died) {
+            const combo = applyGrazes(tier, 1);
+            tier = combo.tierIndex;
+            dTimer = combo.decayTimer;
+            dThreshold = combo.decayThreshold;
+          }
+        }
+        if (screenX + halfW < -grazeDist) {
+          rock.active.value = 0; // back to the pool
+        }
+      }
+
+      // Pinches: the spurs collide and graze exactly like wide wall rocks.
+      for (let i = 0; i < pinches.length; i++) {
+        const p = pinches[i];
+        if (p.active.value === 0) continue;
+        const left = p.worldX.value - scroll;
+        const len = p.length.value;
+        const topLen = p.topLen.value;
+        const botLen = p.botLen.value;
+
+        if (!died) {
+          if (
+            rectsOverlap(hbLeft, hbTop, hbWidth, hbHeight, left, 0, len, topLen) ||
+            rectsOverlap(hbLeft, hbTop, hbWidth, hbHeight, left, 1 - botLen, len, botLen)
+          ) {
+            died = true;
+          } else if (!p.cleared.value) {
             if (
-              slot.armedTop.value === 0 &&
+              p.armedTop.value === 0 &&
               rectsOverlap(
                 hbLeft, hbTop, hbWidth, hbHeight,
-                rockLeft - grazeDist, -grazeDist,
-                rockWidth + 2 * grazeDist, topLen + 2 * grazeDist,
+                left - grazeDist, -grazeDist,
+                len + 2 * grazeDist, topLen + 2 * grazeDist,
               )
             ) {
-              slot.armedTop.value = 1;
+              p.armedTop.value = 1;
             }
             if (
-              slot.armedBottom.value === 0 &&
+              p.armedBottom.value === 0 &&
               rectsOverlap(
                 hbLeft, hbTop, hbWidth, hbHeight,
-                rockLeft - grazeDist, 1 - botLen - grazeDist,
-                rockWidth + 2 * grazeDist, botLen + 2 * grazeDist,
+                left - grazeDist, 1 - botLen - grazeDist,
+                len + 2 * grazeDist, botLen + 2 * grazeDist,
               )
             ) {
-              slot.armedBottom.value = 1;
+              p.armedBottom.value = 1;
             }
           }
         }
 
-        if (!slot.cleared.value && screenX + rockWidth / 2 < hbLeft) {
-          slot.cleared.value = 1;
-          const grazes = slot.armedTop.value + slot.armedBottom.value;
+        if (!p.cleared.value && left + len < hbLeft) {
+          p.cleared.value = 1;
+          const grazes = p.armedTop.value + p.armedBottom.value;
           if (grazes > 0 && !died) {
             const combo = applyGrazes(tier, grazes);
             tier = combo.tierIndex;
@@ -239,8 +363,8 @@ export function useGameLoop(aspectRatio: number): GameLoop {
             dThreshold = combo.decayThreshold;
           }
         }
-        if (screenX + rockWidth / 2 < -rockWidth) {
-          slot.active.value = 0; // back to the pool
+        if (left + len < -grazeDist) {
+          p.active.value = 0; // back to the pool
         }
       }
 
@@ -272,7 +396,7 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     prevPosY.value = prevPos;
     prevScrollX.value = prevScroll;
     accumulator.value = acc;
-    spawnTimer.value = timer;
+    elapsed.value = now;
     score.value = runScore;
     tierIndex.value = tier;
     decayTimer.value = dTimer;
@@ -281,7 +405,6 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     if (died) {
       phase.value = PHASE_DEAD;
       deathAtMs.value = frame.timestamp;
-      thrusting.value = false;
     }
 
     // Render between the last two physics states by the leftover fraction.
@@ -294,7 +417,8 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     renderY,
     renderScrollX,
     scrollX,
-    thrusting,
+    posY,
+    targetY,
     phase,
     score,
     tierIndex,
@@ -302,7 +426,8 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     decayThreshold,
     wallClockMs,
     deathAtMs,
-    slots,
+    rocks,
+    pinches,
     resetRun,
   };
 }

@@ -3,7 +3,7 @@ import { config } from '../config';
 export interface PhysicsSnapshot {
   /** Helicopter centre, shu from the top of the playfield. */
   posY: number;
-  /** Vertical velocity, shu/s. Positive = falling. */
+  /** Vertical velocity, shu/s. Positive = downward. */
   velY: number;
 }
 
@@ -11,24 +11,25 @@ export interface PhysicsSnapshot {
  * Advance the helicopter by one fixed timestep. Pure function of its inputs —
  * the same (state, input, dt) always produces the same result, which is what
  * makes motion identical on 60Hz and 120Hz devices.
+ *
+ * No gravity: with no input the helicopter settles and flies dead straight.
+ * Steering spring-chases targetY, so direction changes carry momentum and a
+ * slight overshoot (springDamping is set below critical on purpose).
  */
 export function stepPhysics(
   posY: number,
   velY: number,
-  thrusting: boolean,
+  targetY: number,
   dt: number,
 ): PhysicsSnapshot {
   'worklet';
-  const { gravity, thrustAccel, maxFallSpeed, maxRiseSpeed } = config.physics;
+  const { springStiffness, springDamping, maxSpeed } = config.physics;
 
-  // Gravity always pulls; thrust fights it while the screen is held.
-  const accel = thrusting ? gravity - thrustAccel : gravity;
+  const accel = springStiffness * (targetY - posY) - springDamping * velY;
   let nextVel = velY + accel * dt;
-  if (nextVel > maxFallSpeed) nextVel = maxFallSpeed;
-  if (nextVel < -maxRiseSpeed) nextVel = -maxRiseSpeed;
+  if (nextVel > maxSpeed) nextVel = maxSpeed;
+  if (nextVel < -maxSpeed) nextVel = -maxSpeed;
 
-  // No position clamping since Phase 2 — the cave walls are collidable and
-  // the loop's collision pass turns wall contact into death.
   const nextPos = posY + nextVel * dt;
 
   return { posY: nextPos, velY: nextVel };

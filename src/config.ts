@@ -19,15 +19,18 @@ export const config = {
   },
 
   physics: {
-    /** Constant downward acceleration (shu/s²). Always applies. */
-    gravity: 2.6,
-    /** Upward acceleration while touching (shu/s²). Fights gravity, so the
-     * net climb rate is thrustAccel − gravity. Must exceed gravity. */
-    thrustAccel: 5.6,
-    /** Terminal fall velocity (shu/s, positive = down). */
-    maxFallSpeed: 1.05,
-    /** Max climb velocity (shu/s). */
-    maxRiseSpeed: 0.85,
+    // No gravity: the helicopter flies dead straight until steered, then
+    // spring-chases the drag target so steering has momentum + overshoot.
+    /** Finger travel → target travel. 1 = the target mirrors the finger
+     * exactly (in screen-height fractions); >1 twitchier, <1 more damped. */
+    steerSensitivity: 1.0,
+    /** Spring pull toward the target (1/s²). Higher = snappier chase. */
+    springStiffness: 90,
+    /** Velocity damping (1/s). Critical damping is 2·√stiffness (≈19 here);
+     * below that the helicopter overshoots slightly — the floaty feel. */
+    springDamping: 14,
+    /** Hard cap on vertical speed (shu/s). */
+    maxSpeed: 1.3,
   },
 
   helicopter: {
@@ -36,7 +39,7 @@ export const config = {
     /** Horizontal anchor of the helicopter centre, as a fraction of screen width. */
     fixedXRatio: 0.3,
     /** Spawn height of the helicopter centre (shu from the top). */
-    startYRatio: 0.45,
+    startYRatio: 0.5,
     /** Collision box as a fraction of the sprite — STRICTLY < 1 so deaths
      * feel fair and grazes feel earned. The most-tuned number in the game. */
     hitboxScale: 0.7,
@@ -49,6 +52,57 @@ export const config = {
     backgroundTileRatio: 0.22,
     /** Thickness of the top/bottom cave walls (shu). Collidable — walls kill. */
     wallThickness: 0.045,
+  },
+
+  obstacles: {
+    // Free-floating rocks at random heights and sizes — never paired columns.
+    /** Mean seconds between rock spawns. */
+    spawnIntervalBase: 0.9,
+    /** Random ± fraction applied to each spawn interval (clusters happen). */
+    spawnIntervalJitter: 0.35,
+    /** Rock size at run start (shu), before growth and per-rock jitter. */
+    baseWidth: 0.07,
+    baseHeight: 0.055,
+    /** Per-rock random ± fraction on each dimension (shape variety). */
+    sizeJitter: 0.4,
+    /** Pooled rock slots — reused, never allocated during play. */
+    poolSize: 14,
+    /** A flyable corridor at least this tall (shu) is guaranteed through
+     * every cluster of rocks/pinch spurs that overlap in x. */
+    minVerticalClearance: 0.16,
+    /** Rocks within this x distance (shu) count as the same "wall" for the
+     * corridor guarantee. */
+    xClearWindow: 0.14,
+    /** Random y attempts before a spawn is skipped as unplaceable. */
+    placementTries: 6,
+    /** Grace period before the first rock of a run appears (s). */
+    firstSpawnDelaySeconds: 1.2,
+  },
+
+  pinch: {
+    // "Once in a while the space gets narrower": a stretch of tunnel where
+    // both walls bulge inward, leaving a corridor that shrinks the further
+    // the run goes.
+    /** When the first pinch of a run starts spawning (s). */
+    firstAtSeconds: 12,
+    /** Mean seconds between pinches after the first. */
+    intervalSeconds: 14,
+    /** Random ± fraction on that interval. */
+    intervalJitter: 0.25,
+    /** Horizontal length of a pinch section (shu). */
+    lengthShu: 0.5,
+    /** Corridor height of the very first pinch (shu)... */
+    gapStart: 0.4,
+    /** ...shrinking by this much per second of run time... */
+    gapShrinkPerSecond: 0.0022,
+    /** ...but never below this (shu). */
+    gapMin: 0.18,
+    /** Random ± offset of the corridor centre from mid-tunnel (shu). */
+    centerJitter: 0.15,
+    /** Pooled pinch slots. */
+    poolSize: 3,
+    /** No rocks spawn within a pinch span ± this margin (shu). */
+    rockFreeMargin: 0.18,
   },
 
   scoring: {
@@ -64,8 +118,6 @@ export const config = {
     retryLockoutSeconds: 0.35,
   },
 
-  // ---- Placeholders below: seeded now, wired up in Phases 3-5 ----
-
   graze: {
     /** How close (shu) the hitbox must pass a rock to register a graze. */
     grazeDistance: 0.035,
@@ -77,34 +129,12 @@ export const config = {
     decayStepSeconds: 1.0,
   },
 
-  obstacles: {
-    /** Seconds between obstacle spawns at difficulty zero. */
-    spawnIntervalBase: 1.6,
-    /** Vertical flying gap left between stalactite and stalagmite (shu). */
-    gapSizeBase: 0.34,
-    /** Max random vertical offset of the gap centre (shu, ±). */
-    gapPositionJitter: 0.18,
-    /** Horizontal width of a rock column (shu). */
-    width: 0.09,
-    /** Shortest a stalactite/stalagmite may be, beyond the wall (shu) —
-     * keeps every obstacle visibly asymmetric instead of vanishing. */
-    minRockLength: 0.06,
-    /** Pooled obstacle slots — reused, never allocated during play. */
-    poolSize: 10,
-    /** Grace period before the first obstacle of a run appears (s). */
-    firstSpawnDelaySeconds: 1.2,
-  },
-
   difficulty: {
-    /** Length of one difficulty zone (seconds). */
-    zoneLengthSeconds: 20,
-    /** Exactly ONE dial advances per zone, cycling through this list. */
-    perZoneDeltas: [
-      { dial: 'obstacleFrequency', delta: -0.15 },
-      { dial: 'gapSize', delta: -0.03 },
-      { dial: 'scrollSpeed', delta: 0.06 },
-      { dial: 'wallNarrowing', delta: 0.03 },
-    ],
+    // "Obstacles get bigger over time": rock dimensions scale with run time.
+    /** Rock size growth per second of run time (fraction of base size). */
+    sizeGrowthPerSecond: 0.012,
+    /** Growth cap — rocks never exceed base × this. */
+    sizeScaleMax: 2.2,
   },
 } as const;
 

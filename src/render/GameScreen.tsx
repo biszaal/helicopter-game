@@ -26,8 +26,9 @@ import {
   PHASE_PLAYING,
   useGameLoop,
 } from '../engine/useGameLoop';
-import { type ObstacleSlot } from '../engine/useObstaclePool';
-import { useThrustGesture } from '../input/useThrustGesture';
+import { type PinchSlot } from '../engine/usePinchPool';
+import { type RockSlot } from '../engine/useRockPool';
+import { useSteerGesture } from '../input/useSteerGesture';
 
 // Cosmetic only — everything gameplay-relevant lives in config.ts.
 const COLORS = {
@@ -72,27 +73,49 @@ function Stripe({ index, tileWidth, screenHeight, renderScrollX }: StripeProps) 
   );
 }
 
-interface ObstacleProps {
-  slot: ObstacleSlot;
+interface RockProps {
+  slot: RockSlot;
   screenHeight: number;
   renderScrollX: SharedValue<number>;
 }
 
-/** A stalactite/stalagmite pair. Inactive slots park offscreen. */
-function Obstacle({ slot, screenHeight, renderScrollX }: ObstacleProps) {
-  const widthPx = config.obstacles.width * screenHeight;
+/** A free-floating rock. Inactive slots park offscreen. */
+function Rock({ slot, screenHeight, renderScrollX }: RockProps) {
   const x = useDerivedValue(() => {
-    if (slot.active.value === 0) return -2 * widthPx;
+    if (slot.active.value === 0) return -screenHeight;
     const screenX = slot.worldX.value - renderScrollX.value;
-    return screenX * screenHeight - widthPx / 2;
+    return (screenX - slot.halfW.value) * screenHeight;
   });
-  const topHeight = useDerivedValue(() => slot.topLen.value * screenHeight);
-  const botY = useDerivedValue(() => (1 - slot.botLen.value) * screenHeight);
-  const botHeight = useDerivedValue(() => slot.botLen.value * screenHeight);
+  const y = useDerivedValue(
+    () => (slot.centerY.value - slot.halfH.value) * screenHeight,
+  );
+  const w = useDerivedValue(() => 2 * slot.halfW.value * screenHeight);
+  const h = useDerivedValue(() => 2 * slot.halfH.value * screenHeight);
+  return <Rect x={x} y={y} width={w} height={h} color={COLORS.rock} />;
+}
+
+interface PinchProps {
+  slot: PinchSlot;
+  screenHeight: number;
+  renderScrollX: SharedValue<number>;
+}
+
+/** A narrow stretch of tunnel: top + bottom wall shelves with a corridor. */
+function Pinch({ slot, screenHeight, renderScrollX }: PinchProps) {
+  const x = useDerivedValue(() => {
+    if (slot.active.value === 0) return -screenHeight;
+    return (slot.worldX.value - renderScrollX.value) * screenHeight;
+  });
+  const w = useDerivedValue(() => slot.length.value * screenHeight);
+  const topH = useDerivedValue(() => slot.topLen.value * screenHeight);
+  const botY = useDerivedValue(
+    () => (1 - slot.botLen.value) * screenHeight,
+  );
+  const botH = useDerivedValue(() => slot.botLen.value * screenHeight);
   return (
     <>
-      <Rect x={x} y={0} width={widthPx} height={topHeight} color={COLORS.rock} />
-      <Rect x={x} y={botY} width={widthPx} height={botHeight} color={COLORS.rock} />
+      <Rect x={x} y={0} width={w} height={topH} color={COLORS.rock} />
+      <Rect x={x} y={botY} width={w} height={botH} color={COLORS.rock} />
     </>
   );
 }
@@ -100,7 +123,7 @@ function Obstacle({ slot, screenHeight, renderScrollX }: ObstacleProps) {
 export function GameScreen() {
   const { width, height } = useWindowDimensions();
   const loop = useGameLoop(width / height);
-  const gesture = useThrustGesture(loop);
+  const gesture = useSteerGesture(loop, height);
   const {
     renderY,
     renderScrollX,
@@ -110,7 +133,8 @@ export function GameScreen() {
     tierIndex,
     decayTimer,
     decayThreshold,
-    slots,
+    rocks,
+    pinches,
   } = loop;
 
   const [gameOver, setGameOver] = useState<{
@@ -178,8 +202,16 @@ export function GameScreen() {
               renderScrollX={renderScrollX}
             />
           ))}
-          {slots.map((slot, i) => (
-            <Obstacle
+          {rocks.map((slot, i) => (
+            <Rock
+              key={i}
+              slot={slot}
+              screenHeight={height}
+              renderScrollX={renderScrollX}
+            />
+          ))}
+          {pinches.map((slot, i) => (
+            <Pinch
               key={i}
               slot={slot}
               screenHeight={height}
