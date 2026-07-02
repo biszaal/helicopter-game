@@ -6,6 +6,7 @@ import {
 import { config } from '../config';
 import { stepPhysics } from './physics';
 import { rectsOverlap } from './collision';
+import { applyGrazes, stepDecay } from './scoring';
 import { useObstaclePool, type ObstacleSlot } from './useObstaclePool';
 
 /** Fixed physics timestep (s). Physics only ever advances in these increments. */
@@ -26,6 +27,14 @@ export interface GameLoop {
   thrusting: SharedValue<boolean>;
   /** PHASE_PLAYING | PHASE_DEAD. */
   phase: SharedValue<number>;
+  /** Banked score. Monotonic within a run — it can never decrease. */
+  score: SharedValue<number>;
+  /** Index into config.graze.multiplierTiers — the current banking rate. */
+  tierIndex: SharedValue<number>;
+  /** Seconds since the last graze/decay step (drives the cooling bar). */
+  decayTimer: SharedValue<number>;
+  /** Seconds the timer must reach before the next one-tier step down. */
+  decayThreshold: SharedValue<number>;
   /** Monotonic frame clock (ms) — always ticking, even while dead. */
   wallClockMs: SharedValue<number>;
   /** wallClockMs at the moment of death (retry lockout reference). */
@@ -64,6 +73,11 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     config.obstacles.spawnIntervalBase - config.obstacles.firstSpawnDelaySeconds,
   );
 
+  const score = useSharedValue(0);
+  const tierIndex = useSharedValue(0);
+  const decayTimer = useSharedValue(0);
+  const decayThreshold = useSharedValue<number>(config.graze.decaySeconds);
+
   const slots = useObstaclePool();
 
   const spawnObstacle = (scroll: number) => {
@@ -87,6 +101,8 @@ export function useGameLoop(aspectRatio: number): GameLoop {
         slot.botLen.value = 1 - (centre + halfGap);
         slot.worldX.value = scroll + aspectRatio + width / 2;
         slot.cleared.value = 0;
+        slot.armedTop.value = 0;
+        slot.armedBottom.value = 0;
         slot.active.value = 1;
         return;
       }
@@ -109,6 +125,10 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     for (let i = 0; i < slots.length; i++) {
       slots[i].active.value = 0;
     }
+    score.value = 0;
+    tierIndex.value = 0;
+    decayTimer.value = 0;
+    decayThreshold.value = config.graze.decaySeconds;
     phase.value = PHASE_PLAYING;
   };
 
@@ -129,6 +149,10 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     let prevPos = prevPosY.value;
     let prevScroll = prevScrollX.value;
     let timer = spawnTimer.value;
+    let runScore = score.value;
+    let tier = tierIndex.value;
+    let dTimer = decayTimer.value;
+    let dThreshold = decayThreshold.value;
     let died = false;
 
     // Helicopter hitbox — strictly smaller than the sprite (hitboxScale < 1).
@@ -138,6 +162,8 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     const hbLeft = heliCentreX - hbWidth / 2;
     const rockWidth = config.obstacles.width;
     const wall = config.world.wallThickness;
+    const grazeDist = config.graze.grazeDistance;
+    const tiers = config.graze.multiplierTiers;
 
     while (acc >= FIXED_DT) {
       prevPos = pos;
@@ -162,31 +188,74 @@ export function useGameLoop(aspectRatio: number): GameLoop {
         died = true;
       }
 
-      // Obstacles: collide, then release slots that scrolled off the left.
+      // Obstacles: collide, arm grazes, then bank them as rocks are cleared.
       for (let i = 0; i < slots.length; i++) {
         const slot = slots[i];
         if (slot.active.value === 0) continue;
         const screenX = slot.worldX.value - scroll;
         const rockLeft = screenX - rockWidth / 2;
+        const topLen = slot.topLen.value;
+        const botLen = slot.botLen.value;
 
         if (!died) {
-          const topLen = slot.topLen.value;
-          const botLen = slot.botLen.value;
           if (
             rectsOverlap(hbLeft, hbTop, hbWidth, hbHeight, rockLeft, 0, rockWidth, topLen) ||
             rectsOverlap(hbLeft, hbTop, hbWidth, hbHeight, rockLeft, 1 - botLen, rockWidth, botLen)
           ) {
             died = true;
+          } else if (!slot.cleared.value) {
+            // Graze arming: hitbox inside a rock's band (rock inflated by
+            // grazeDistance) without touching it. Banks when the rock clears.
+            if (
+              slot.armedTop.value === 0 &&
+              rectsOverlap(
+                hbLeft, hbTop, hbWidth, hbHeight,
+                rockLeft - grazeDist, -grazeDist,
+                rockWidth + 2 * grazeDist, topLen + 2 * grazeDist,
+              )
+            ) {
+              slot.armedTop.value = 1;
+            }
+            if (
+              slot.armedBottom.value === 0 &&
+              rectsOverlap(
+                hbLeft, hbTop, hbWidth, hbHeight,
+                rockLeft - grazeDist, 1 - botLen - grazeDist,
+                rockWidth + 2 * grazeDist, botLen + 2 * grazeDist,
+              )
+            ) {
+              slot.armedBottom.value = 1;
+            }
           }
         }
 
         if (!slot.cleared.value && screenX + rockWidth / 2 < hbLeft) {
           slot.cleared.value = 1;
+          const grazes = slot.armedTop.value + slot.armedBottom.value;
+          if (grazes > 0 && !died) {
+            const combo = applyGrazes(tier, grazes);
+            tier = combo.tierIndex;
+            dTimer = combo.decayTimer;
+            dThreshold = combo.decayThreshold;
+          }
         }
         if (screenX + rockWidth / 2 < -rockWidth) {
           slot.active.value = 0; // back to the pool
         }
       }
+
+      // Bank instantly at the current multiplier — the total only ever grows.
+      runScore +=
+        config.scoring.basePointsPerShu *
+        tiers[tier] *
+        config.world.baseScrollSpeed *
+        FIXED_DT;
+
+      // Real-time decay pressure: one tier at a time, never a hard reset.
+      const decayed = stepDecay(tier, dTimer, dThreshold, FIXED_DT);
+      tier = decayed.tierIndex;
+      dTimer = decayed.decayTimer;
+      dThreshold = decayed.decayThreshold;
 
       if (died) {
         // Freeze exactly at the fatal step: no leftover time, no interpolation.
@@ -204,6 +273,10 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     prevScrollX.value = prevScroll;
     accumulator.value = acc;
     spawnTimer.value = timer;
+    score.value = runScore;
+    tierIndex.value = tier;
+    decayTimer.value = dTimer;
+    decayThreshold.value = dThreshold;
 
     if (died) {
       phase.value = PHASE_DEAD;
@@ -223,6 +296,10 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     scrollX,
     thrusting,
     phase,
+    score,
+    tierIndex,
+    decayTimer,
+    decayThreshold,
     wallClockMs,
     deathAtMs,
     slots,

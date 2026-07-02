@@ -17,6 +17,10 @@ export interface ObstacleSlot {
   botLen: SharedValue<number>;
   /** 1 once the helicopter has passed this column in the current run. */
   cleared: SharedValue<number>;
+  /** 1 if the hitbox entered the stalactite's graze band while passing. */
+  armedTop: SharedValue<number>;
+  /** 1 if the hitbox entered the stalagmite's graze band while passing. */
+  armedBottom: SharedValue<number>;
 }
 
 export function useObstaclePool(): ObstacleSlot[] {
@@ -31,6 +35,8 @@ export function useObstaclePool(): ObstacleSlot[] {
       topLen: useSharedValue(0),
       botLen: useSharedValue(0),
       cleared: useSharedValue(0),
+      armedTop: useSharedValue(0),
+      armedBottom: useSharedValue(0),
     });
   }
   return slots;

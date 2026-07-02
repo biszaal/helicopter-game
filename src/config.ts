@@ -54,6 +54,9 @@ export const config = {
   scoring: {
     /** Distance display only: how many "metres" one shu of scroll is worth. */
     metersPerShu: 100,
+    /** Base banking rate: points per shu of scroll, before the multiplier.
+     * Points bank instantly and the total can never go down. */
+    basePointsPerShu: 120,
   },
 
   ui: {

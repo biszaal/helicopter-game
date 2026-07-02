@@ -39,7 +39,10 @@ const COLORS = {
 };
 
 const fontFamily = Platform.select({ ios: 'Helvetica', default: 'sans-serif' });
-const hudFont = matchFont({ fontFamily, fontSize: 22, fontWeight: 'bold' });
+const scoreFont = matchFont({ fontFamily, fontSize: 34, fontWeight: 'bold' });
+const multiplierFont = matchFont({ fontFamily, fontSize: 24, fontWeight: 'bold' });
+const distanceFont = matchFont({ fontFamily, fontSize: 15, fontWeight: 'bold' });
+const AMBER = '#ffb648';
 
 interface StripeProps {
   index: number;
@@ -98,15 +101,29 @@ export function GameScreen() {
   const { width, height } = useWindowDimensions();
   const loop = useGameLoop(width / height);
   const gesture = useThrustGesture(loop);
-  const { renderY, renderScrollX, scrollX, phase, slots } = loop;
+  const {
+    renderY,
+    renderScrollX,
+    scrollX,
+    phase,
+    score,
+    tierIndex,
+    decayTimer,
+    decayThreshold,
+    slots,
+  } = loop;
 
-  const [gameOver, setGameOver] = useState<{ distance: number } | null>(null);
+  const [gameOver, setGameOver] = useState<{
+    score: number;
+    distance: number;
+  } | null>(null);
 
   useAnimatedReaction(
     () => phase.value,
     (current, previous) => {
       if (current === PHASE_DEAD && previous !== PHASE_DEAD) {
         runOnJS(setGameOver)({
+          score: Math.floor(score.value),
           distance: Math.floor(scrollX.value * config.scoring.metersPerShu),
         });
       } else if (current === PHASE_PLAYING && previous === PHASE_DEAD) {
@@ -126,6 +143,23 @@ export function GameScreen() {
   const stripeCount = Math.ceil(width / (2 * tileWidth)) + 1;
   const wallPx = height * config.world.wallThickness;
 
+  // HUD layout (cosmetic) — a left-aligned column under the top wall.
+  const hudX = width * 0.06;
+  const hudTop = height * 0.09;
+  const barMaxWidth = width * 0.24;
+  const barY = hudTop + 44;
+  const barHeight = 5;
+
+  const scoreText = useDerivedValue(() => `${Math.floor(score.value)}`);
+  const multiplierText = useDerivedValue(
+    () => `×${config.graze.multiplierTiers[tierIndex.value]}`,
+  );
+  // Cooling bar: time left before the multiplier steps down one tier.
+  const barWidth = useDerivedValue(() => {
+    if (tierIndex.value === 0) return 0;
+    const remaining = 1 - decayTimer.value / decayThreshold.value;
+    return Math.max(0, remaining) * barMaxWidth;
+  });
   const distanceText = useDerivedValue(
     () => `${Math.floor(renderScrollX.value * config.scoring.metersPerShu)} m`,
   );
@@ -168,10 +202,38 @@ export function GameScreen() {
             color={COLORS.helicopter}
           />
           <SkiaText
-            x={width * 0.06}
-            y={height * 0.09}
+            x={hudX}
+            y={hudTop}
+            text={scoreText}
+            font={scoreFont}
+            color={COLORS.hud}
+          />
+          <SkiaText
+            x={hudX}
+            y={hudTop + 32}
+            text={multiplierText}
+            font={multiplierFont}
+            color={AMBER}
+          />
+          <Rect
+            x={hudX}
+            y={barY}
+            width={barMaxWidth}
+            height={barHeight}
+            color={COLORS.stripe}
+          />
+          <Rect
+            x={hudX}
+            y={barY}
+            width={barWidth}
+            height={barHeight}
+            color={AMBER}
+          />
+          <SkiaText
+            x={hudX}
+            y={barY + 26}
             text={distanceText}
-            font={hudFont}
+            font={distanceFont}
             color={COLORS.hud}
           />
         </Canvas>
@@ -179,6 +241,7 @@ export function GameScreen() {
       {gameOver !== null && (
         <View style={styles.overlay} pointerEvents="none">
           <Text style={styles.overlayTitle}>GAME OVER</Text>
+          <Text style={styles.overlayScore}>{gameOver.score}</Text>
           <Text style={styles.overlayDistance}>{gameOver.distance} m</Text>
           <Text style={styles.overlayHint}>TAP TO RETRY</Text>
         </View>
@@ -210,11 +273,17 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 6,
   },
-  overlayDistance: {
+  overlayScore: {
     color: '#ffb648',
-    fontSize: 52,
+    fontSize: 56,
     fontWeight: '800',
     marginTop: 12,
+  },
+  overlayDistance: {
+    color: '#8a94a3',
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 4,
   },
   overlayHint: {
     color: '#8a94a3',
