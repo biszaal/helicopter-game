@@ -47,9 +47,21 @@ export const config = {
     baseScrollSpeed: 0.55,
     /** Width of one background stripe (shu) — proves scroll speed visually. */
     backgroundTileRatio: 0.22,
+    /** Thickness of the top/bottom cave walls (shu). Collidable — walls kill. */
+    wallThickness: 0.045,
   },
 
-  // ---- Placeholders below: seeded now, wired up in Phases 2-5 ----
+  scoring: {
+    /** Distance display only: how many "metres" one shu of scroll is worth. */
+    metersPerShu: 100,
+  },
+
+  ui: {
+    /** Seconds after death before a tap is accepted as retry (anti-mash). */
+    retryLockoutSeconds: 0.35,
+  },
+
+  // ---- Placeholders below: seeded now, wired up in Phases 3-5 ----
 
   graze: {
     /** How close (shu) the hitbox must pass a rock to register a graze. */
@@ -69,6 +81,15 @@ export const config = {
     gapSizeBase: 0.34,
     /** Max random vertical offset of the gap centre (shu, ±). */
     gapPositionJitter: 0.18,
+    /** Horizontal width of a rock column (shu). */
+    width: 0.09,
+    /** Shortest a stalactite/stalagmite may be, beyond the wall (shu) —
+     * keeps every obstacle visibly asymmetric instead of vanishing. */
+    minRockLength: 0.06,
+    /** Pooled obstacle slots — reused, never allocated during play. */
+    poolSize: 10,
+    /** Grace period before the first obstacle of a run appears (s). */
+    firstSpawnDelaySeconds: 1.2,
   },
 
   difficulty: {
