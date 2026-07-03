@@ -65,6 +65,7 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
     decayThreshold,
     wallClockMs,
     deathAtMs,
+    zoneIndex,
     rocks,
     pinches,
   } = loop;
@@ -146,6 +147,7 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
   const distanceText = useDerivedValue(
     () => `${Math.floor(renderScrollX.value * config.scoring.metersPerShu)} m`,
   );
+  const zoneText = useDerivedValue(() => config.zones[zoneIndex.value].name);
 
   return (
     <View style={styles.root}>
@@ -227,6 +229,13 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
             x={hudX}
             y={barY + 26}
             text={distanceText}
+            font={distanceFont}
+            color={theme.colors.hud}
+          />
+          <SkiaText
+            x={hudX}
+            y={barY + 46}
+            text={zoneText}
             font={distanceFont}
             color={theme.colors.hud}
           />

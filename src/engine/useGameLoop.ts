@@ -12,6 +12,7 @@ import {
   placeRock,
   rampAt,
   sizeScaleAt,
+  zoneIndexAt,
   type OccupiedRect,
 } from './spawning';
 import { useRockPool, type RockSlot } from './useRockPool';
@@ -51,6 +52,10 @@ export interface GameLoop {
   wallClockMs: SharedValue<number>;
   /** wallClockMs at the moment of death (retry lockout reference). */
   deathAtMs: SharedValue<number>;
+  /** Index into config.zones — advances at each distance milestone. */
+  zoneIndex: SharedValue<number>;
+  /** wallClockMs at the last zone change (0 until the first crossing). */
+  zoneChangedAtMs: SharedValue<number>;
   /** Pooled world objects, for rendering. */
   rocks: RockSlot[];
   pinches: PinchSlot[];
@@ -89,6 +94,9 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     config.obstacles.firstSpawnDelaySeconds,
   );
   const nextPinchAt = useSharedValue<number>(config.pinch.firstAtSeconds);
+
+  const zoneIndex = useSharedValue(0);
+  const zoneChangedAtMs = useSharedValue(0);
 
   const score = useSharedValue(0);
   const tierIndex = useSharedValue(0);
@@ -198,6 +206,8 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     elapsed.value = 0;
     nextRockAt.value = config.obstacles.firstSpawnDelaySeconds;
     nextPinchAt.value = config.pinch.firstAtSeconds;
+    zoneIndex.value = 0;
+    zoneChangedAtMs.value = 0;
     for (let i = 0; i < rocks.length; i++) {
       rocks[i].active.value = 0;
     }
@@ -401,6 +411,13 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     prevScrollX.value = prevScroll;
     accumulator.value = acc;
     elapsed.value = now;
+
+    // Zone crossings — once per frame is plenty (boundaries are metres apart).
+    const zone = zoneIndexAt(scroll);
+    if (zone !== zoneIndex.value) {
+      zoneIndex.value = zone;
+      zoneChangedAtMs.value = frame.timestamp;
+    }
     score.value = runScore;
     tierIndex.value = tier;
     decayTimer.value = dTimer;
@@ -431,6 +448,8 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     decayThreshold,
     wallClockMs,
     deathAtMs,
+    zoneIndex,
+    zoneChangedAtMs,
     rocks,
     pinches,
     resetRun,
