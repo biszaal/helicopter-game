@@ -10,6 +10,7 @@ import { applyGrazes, stepDecay } from './scoring';
 import {
   pinchSpurs,
   placeRock,
+  rampAt,
   sizeScaleAt,
   type OccupiedRect,
 } from './spawning';
@@ -82,7 +83,7 @@ export function useGameLoop(aspectRatio: number): GameLoop {
   const wallClockMs = useSharedValue(0);
   const deathAtMs = useSharedValue(0);
 
-  /** Run time (s) — drives the size ramp and the pinch schedule. */
+  /** Run time (s) — drives the spawn schedules. */
   const elapsed = useSharedValue(0);
   const nextRockAt = useSharedValue<number>(
     config.obstacles.firstSpawnDelaySeconds,
@@ -97,12 +98,12 @@ export function useGameLoop(aspectRatio: number): GameLoop {
   const rocks = useRockPool();
   const pinches = usePinchPool();
 
-  const spawnPinch = (scroll: number, now: number) => {
+  const spawnPinch = (scroll: number) => {
     'worklet';
     for (let i = 0; i < pinches.length; i++) {
       const p = pinches[i];
       if (p.active.value === 0) {
-        const spurs = pinchSpurs(now, Math.random);
+        const spurs = pinchSpurs(scroll, Math.random);
         p.worldX.value = scroll + aspectRatio;
         p.length.value = config.pinch.lengthShu;
         p.topLen.value = spurs.topLen;
@@ -116,10 +117,10 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     }
   };
 
-  const spawnRock = (scroll: number, now: number) => {
+  const spawnRock = (scroll: number) => {
     'worklet';
     const { baseWidth, baseHeight, sizeJitter } = config.obstacles;
-    const scale = sizeScaleAt(now);
+    const scale = sizeScaleAt(scroll);
     const halfW =
       (baseWidth / 2) * scale * (1 + (Math.random() * 2 - 1) * sizeJitter);
     const halfH =
@@ -163,6 +164,7 @@ export function useGameLoop(aspectRatio: number): GameLoop {
       halfH,
       occupied,
       Math.random,
+      rampAt(scroll, config.difficulty.clearance),
     );
     if (y === null) return; // never seal the tunnel — skip instead
 
@@ -247,25 +249,26 @@ export function useGameLoop(aspectRatio: number): GameLoop {
       const next = stepPhysics(pos, vel, targetY.value, FIXED_DT);
       pos = next.posY;
       vel = next.velY;
-      scroll += config.world.baseScrollSpeed * FIXED_DT;
+      const speed = rampAt(scroll, config.difficulty.scrollSpeed);
+      scroll += speed * FIXED_DT;
       now += FIXED_DT;
       acc -= FIXED_DT;
 
-      // Spawning — absolute-time schedules with jittered rescheduling.
+      // Spawning — time schedules whose intervals shorten with distance.
       if (now >= nextRockAt.value) {
-        const { spawnIntervalBase, spawnIntervalJitter } = config.obstacles;
+        const interval = rampAt(scroll, config.difficulty.rockInterval);
         nextRockAt.value =
           now +
-          spawnIntervalBase *
-            (1 + (Math.random() * 2 - 1) * spawnIntervalJitter);
-        spawnRock(scroll, now);
+          interval *
+            (1 + (Math.random() * 2 - 1) * config.obstacles.spawnIntervalJitter);
+        spawnRock(scroll);
       }
       if (now >= nextPinchAt.value) {
-        const { intervalSeconds, intervalJitter } = config.pinch;
+        const interval = rampAt(scroll, config.difficulty.pinchInterval);
         nextPinchAt.value =
           now +
-          intervalSeconds * (1 + (Math.random() * 2 - 1) * intervalJitter);
-        spawnPinch(scroll, now);
+          interval * (1 + (Math.random() * 2 - 1) * config.pinch.intervalJitter);
+        spawnPinch(scroll);
       }
 
       const hbTop = pos - hbHeight / 2;
@@ -372,11 +375,9 @@ export function useGameLoop(aspectRatio: number): GameLoop {
       }
 
       // Bank instantly at the current multiplier — the total only ever grows.
+      // Points per METRE stay constant; points per second rise with the pace.
       runScore +=
-        config.scoring.basePointsPerShu *
-        tiers[tier] *
-        config.world.baseScrollSpeed *
-        FIXED_DT;
+        config.scoring.basePointsPerShu * tiers[tier] * speed * FIXED_DT;
 
       // Real-time decay pressure: one tier at a time, never a hard reset.
       const decayed = stepDecay(tier, dTimer, dThreshold, FIXED_DT);

@@ -34,32 +34,30 @@ export function zoneIndexAt(distanceShu: number): number {
   return index;
 }
 
-/** "Rocks get bigger over time": size multiplier at a given run time. */
-export function sizeScaleAt(elapsedSeconds: number): number {
+/** "Rocks get bigger the deeper you go": size multiplier at a run distance. */
+export function sizeScaleAt(distanceShu: number): number {
   'worklet';
-  const scale = 1 + config.difficulty.sizeGrowthPerSecond * elapsedSeconds;
-  return Math.min(scale, config.difficulty.sizeScaleMax);
+  return rampAt(distanceShu, config.difficulty.sizeScale);
 }
 
-/** "Pinches get narrower the further you go": corridor height at run time. */
-export function pinchGapAt(elapsedSeconds: number): number {
+/** "Pinches get narrower the further you go": corridor height at a distance. */
+export function pinchGapAt(distanceShu: number): number {
   'worklet';
-  const gap =
-    config.pinch.gapStart - config.pinch.gapShrinkPerSecond * elapsedSeconds;
-  return Math.max(gap, config.pinch.gapMin);
+  return rampAt(distanceShu, config.difficulty.pinchGap);
 }
 
 /**
- * Stalactite/stalagmite lengths for a pinch spawned at the given run time.
- * The corridor centre is jittered but clamped so both spurs stay inside the
- * playfield (a spur may degenerate to wall thickness — a mild pinch).
+ * Stalactite/stalagmite lengths for a pinch spawned at the given run
+ * distance. The corridor centre is jittered but clamped so both spurs stay
+ * inside the playfield (a spur may degenerate to wall thickness — a mild
+ * pinch).
  */
 export function pinchSpurs(
-  elapsedSeconds: number,
+  distanceShu: number,
   rng: () => number,
 ): { topLen: number; botLen: number } {
   'worklet';
-  const gap = pinchGapAt(elapsedSeconds);
+  const gap = pinchGapAt(distanceShu);
   const wall = config.world.wallThickness;
   const minCentre = wall + gap / 2;
   const maxCentre = 1 - wall - gap / 2;
@@ -77,6 +75,8 @@ export function pinchSpurs(
  * the same "wall". The candidate is validated by merging all blocked
  * y-intervals (walls included) and checking the widest remaining free gap.
  *
+ * The clearance is passed in by the caller because it ramps with distance.
+ *
  * Returns null when no valid spot is found — the caller skips the spawn
  * rather than ever sealing the tunnel shut.
  */
@@ -86,10 +86,10 @@ export function placeRock(
   halfH: number,
   occupied: OccupiedRect[],
   rng: () => number,
+  clearance: number,
 ): number | null {
   'worklet';
   const wall = config.world.wallThickness;
-  const clearance = config.obstacles.minVerticalClearance;
   const xWindow = config.obstacles.xClearWindow;
 
   const minY = wall + halfH;

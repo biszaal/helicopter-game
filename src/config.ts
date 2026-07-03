@@ -46,8 +46,7 @@ export const config = {
   },
 
   world: {
-    /** How fast the cave scrolls past (shu/s). */
-    baseScrollSpeed: 0.55,
+    // Scroll speed lives in difficulty.scrollSpeed — it ramps with distance.
     /** Width of one background stripe (shu) — proves scroll speed visually. */
     backgroundTileRatio: 0.22,
     /** Thickness of the top/bottom cave walls (shu). Collidable — walls kill. */
@@ -56,8 +55,7 @@ export const config = {
 
   obstacles: {
     // Free-floating rocks at random heights and sizes — never paired columns.
-    /** Mean seconds between rock spawns. */
-    spawnIntervalBase: 0.9,
+    // The mean spawn interval lives in difficulty.rockInterval (it ramps).
     /** Random ± fraction applied to each spawn interval (clusters happen). */
     spawnIntervalJitter: 0.35,
     /** Rock size at run start (shu), before growth and per-rock jitter. */
@@ -67,9 +65,7 @@ export const config = {
     sizeJitter: 0.4,
     /** Pooled rock slots — reused, never allocated during play. */
     poolSize: 14,
-    /** A flyable corridor at least this tall (shu) is guaranteed through
-     * every cluster of rocks/pinch spurs that overlap in x. */
-    minVerticalClearance: 0.16,
+    // The guaranteed-corridor height lives in difficulty.clearance (it ramps).
     /** Rocks within this x distance (shu) count as the same "wall" for the
      * corridor guarantee. */
     xClearWindow: 0.14,
@@ -85,18 +81,12 @@ export const config = {
     // the run goes.
     /** When the first pinch of a run starts spawning (s). */
     firstAtSeconds: 12,
-    /** Mean seconds between pinches after the first. */
-    intervalSeconds: 14,
-    /** Random ± fraction on that interval. */
+    // Mean interval and corridor height live in difficulty.pinchInterval and
+    // difficulty.pinchGap — both ramp with distance.
+    /** Random ± fraction on the spawn interval. */
     intervalJitter: 0.25,
     /** Horizontal length of a pinch section (shu). */
     lengthShu: 0.5,
-    /** Corridor height of the very first pinch (shu)... */
-    gapStart: 0.4,
-    /** ...shrinking by this much per second of run time... */
-    gapShrinkPerSecond: 0.0022,
-    /** ...but never below this (shu). */
-    gapMin: 0.18,
     /** Random ± offset of the corridor centre from mid-tunnel (shu). */
     centerJitter: 0.15,
     /** Pooled pinch slots. */
@@ -140,11 +130,22 @@ export const config = {
   ],
 
   difficulty: {
-    // "Obstacles get bigger over time": rock dimensions scale with run time.
-    /** Rock size growth per second of run time (fraction of base size). */
-    sizeGrowthPerSecond: 0.012,
-    /** Growth cap — rocks never exceed base × this. */
-    sizeScaleMax: 2.2,
+    // Every dial is a linear-with-cap ramp over DISTANCE scrolled (shu), so
+    // difficulty at a given metre mark is identical for every run. The cave
+    // runs 55–95 m/s; these caps land around 5000 m ≈ 68 s into a run.
+    /** Scroll speed (shu/s) — the core adrenaline dial. */
+    scrollSpeed: { start: 0.55, perShu: 0.008, cap: 0.95 },
+    /** Mean seconds between rock spawns — rocks arrive more often deeper in. */
+    rockInterval: { start: 0.9, perShu: -0.008, cap: 0.5 },
+    /** Guaranteed flyable corridor height (shu) — snug deeper in, never
+     * unfair: heli hitbox 0.035 + a graze band each side ≈ 0.105. */
+    clearance: { start: 0.16, perShu: -0.0007, cap: 0.13 },
+    /** Rock size multiplier — "obstacles get bigger the deeper you go". */
+    sizeScale: { start: 1, perShu: 0.022, cap: 2.2 },
+    /** Pinch corridor height (shu) — "the narrow parts get narrower". */
+    pinchGap: { start: 0.4, perShu: -0.004, cap: 0.18 },
+    /** Mean seconds between pinches. */
+    pinchInterval: { start: 14, perShu: -0.08, cap: 10 },
   },
 } as const;
 
