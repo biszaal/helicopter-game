@@ -13,7 +13,11 @@
       "backgroundColor": "#14181f"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.biszaal.helicopter",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -26,6 +30,15 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "09277bd9-4f02-4c1f-8def-7cf4de8aec2b"
+      }
+    },
+    "owner": "biszaaltech",
+    "plugins": [
+      "expo-audio"
+    ]
   }
 }

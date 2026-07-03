@@ -34,6 +34,8 @@ export interface GameLoop {
   posY: SharedValue<number>;
   /** Altitude the helicopter spring-chases. Set by the drag gesture. */
   targetY: SharedValue<number>;
+  /** Vertical spring velocity (shu/s) — read-only, drives the sprite tilt. */
+  velY: SharedValue<number>;
   /** PHASE_PLAYING | PHASE_DEAD. */
   phase: SharedValue<number>;
   /** Banked score. Monotonic within a run — it can never decrease. */
@@ -173,6 +175,7 @@ export function useGameLoop(aspectRatio: number): GameLoop {
         r.halfH.value = halfH;
         r.cleared.value = 0;
         r.armed.value = 0;
+        r.seed.value = Math.random(); // cosmetic: shape variant
         r.active.value = 1;
         return;
       }
@@ -419,6 +422,7 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     scrollX,
     posY,
     targetY,
+    velY,
     phase,
     score,
     tierIndex,

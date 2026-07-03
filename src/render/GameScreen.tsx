@@ -1,11 +1,11 @@
 import {
   Canvas,
-  Fill,
+  Group,
   matchFont,
   Rect,
   Text as SkiaText,
 } from '@shopify/react-native-skia';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Platform,
   StyleSheet,
@@ -14,125 +14,57 @@ import {
   View,
 } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
-import {
+import Animated, {
+  FadeIn,
   runOnJS,
   useAnimatedReaction,
   useDerivedValue,
-  type SharedValue,
 } from 'react-native-reanimated';
+import { hapticCrash, hapticGraze } from '../audio/haptics';
+import { playCrash, startRotor, stopRotor } from '../audio/sounds';
 import { config } from '../config';
 import {
   PHASE_DEAD,
   PHASE_PLAYING,
   useGameLoop,
 } from '../engine/useGameLoop';
-import { type PinchSlot } from '../engine/usePinchPool';
-import { type RockSlot } from '../engine/useRockPool';
 import { useSteerGesture } from '../input/useSteerGesture';
-
-// Cosmetic only — everything gameplay-relevant lives in config.ts.
-const COLORS = {
-  background: '#20242b',
-  stripe: '#2a303a',
-  rock: '#454e5c',
-  helicopter: '#a7b0bb',
-  hud: '#dce3ec',
-};
+import { useSettings } from '../state/settings';
+import { Background } from './Background';
+import { GameButton } from './GameButton';
+import { CaveWalls } from './CaveWalls';
+import { CrashEffect, useScreenShake } from './CrashEffect';
+import { Helicopter } from './Helicopter';
+import { Pinch } from './Pinches';
+import { Rock } from './Rocks';
+import { theme } from './theme';
 
 const fontFamily = Platform.select({ ios: 'Helvetica', default: 'sans-serif' });
 const scoreFont = matchFont({ fontFamily, fontSize: 34, fontWeight: 'bold' });
 const multiplierFont = matchFont({ fontFamily, fontSize: 24, fontWeight: 'bold' });
 const distanceFont = matchFont({ fontFamily, fontSize: 15, fontWeight: 'bold' });
-const AMBER = '#ffb648';
 
-interface StripeProps {
-  index: number;
-  tileWidth: number;
-  screenHeight: number;
-  renderScrollX: SharedValue<number>;
+interface GameScreenProps {
+  onExitToMenu: () => void;
 }
 
-/**
- * One background stripe. Stripes sit on every other tile, so the repeating
- * pattern is two tiles wide and the scroll offset wraps at 2 × tileWidth.
- */
-function Stripe({ index, tileWidth, screenHeight, renderScrollX }: StripeProps) {
-  const patternWidth = 2 * tileWidth;
-  const x = useDerivedValue(() => {
-    const scrollPx = renderScrollX.value * screenHeight;
-    return index * patternWidth - (scrollPx % patternWidth);
-  });
-  return (
-    <Rect
-      x={x}
-      y={0}
-      width={tileWidth}
-      height={screenHeight}
-      color={COLORS.stripe}
-    />
-  );
-}
-
-interface RockProps {
-  slot: RockSlot;
-  screenHeight: number;
-  renderScrollX: SharedValue<number>;
-}
-
-/** A free-floating rock. Inactive slots park offscreen. */
-function Rock({ slot, screenHeight, renderScrollX }: RockProps) {
-  const x = useDerivedValue(() => {
-    if (slot.active.value === 0) return -screenHeight;
-    const screenX = slot.worldX.value - renderScrollX.value;
-    return (screenX - slot.halfW.value) * screenHeight;
-  });
-  const y = useDerivedValue(
-    () => (slot.centerY.value - slot.halfH.value) * screenHeight,
-  );
-  const w = useDerivedValue(() => 2 * slot.halfW.value * screenHeight);
-  const h = useDerivedValue(() => 2 * slot.halfH.value * screenHeight);
-  return <Rect x={x} y={y} width={w} height={h} color={COLORS.rock} />;
-}
-
-interface PinchProps {
-  slot: PinchSlot;
-  screenHeight: number;
-  renderScrollX: SharedValue<number>;
-}
-
-/** A narrow stretch of tunnel: top + bottom wall shelves with a corridor. */
-function Pinch({ slot, screenHeight, renderScrollX }: PinchProps) {
-  const x = useDerivedValue(() => {
-    if (slot.active.value === 0) return -screenHeight;
-    return (slot.worldX.value - renderScrollX.value) * screenHeight;
-  });
-  const w = useDerivedValue(() => slot.length.value * screenHeight);
-  const topH = useDerivedValue(() => slot.topLen.value * screenHeight);
-  const botY = useDerivedValue(
-    () => (1 - slot.botLen.value) * screenHeight,
-  );
-  const botH = useDerivedValue(() => slot.botLen.value * screenHeight);
-  return (
-    <>
-      <Rect x={x} y={0} width={w} height={topH} color={COLORS.rock} />
-      <Rect x={x} y={botY} width={w} height={botH} color={COLORS.rock} />
-    </>
-  );
-}
-
-export function GameScreen() {
+export function GameScreen({ onExitToMenu }: GameScreenProps) {
   const { width, height } = useWindowDimensions();
+  const { recordRun } = useSettings();
   const loop = useGameLoop(width / height);
   const gesture = useSteerGesture(loop, height);
   const {
     renderY,
     renderScrollX,
     scrollX,
+    velY,
     phase,
     score,
     tierIndex,
     decayTimer,
     decayThreshold,
+    wallClockMs,
+    deathAtMs,
     rocks,
     pinches,
   } = loop;
@@ -142,30 +74,57 @@ export function GameScreen() {
     distance: number;
   } | null>(null);
 
+  // The rotor runs whenever this screen is up and the helicopter is alive.
+  useEffect(() => {
+    startRotor();
+    return stopRotor;
+  }, []);
+
+  const handleDeath = (finalScore: number, distance: number) => {
+    setGameOver({ score: finalScore, distance });
+    stopRotor();
+    playCrash();
+    hapticCrash();
+    recordRun(finalScore, distance);
+  };
+  const handleRetry = () => {
+    setGameOver(null);
+    startRotor();
+  };
+
   useAnimatedReaction(
     () => phase.value,
     (current, previous) => {
       if (current === PHASE_DEAD && previous !== PHASE_DEAD) {
-        runOnJS(setGameOver)({
-          score: Math.floor(score.value),
-          distance: Math.floor(scrollX.value * config.scoring.metersPerShu),
-        });
+        runOnJS(handleDeath)(
+          Math.floor(score.value),
+          Math.floor(scrollX.value * config.scoring.metersPerShu),
+        );
       } else if (current === PHASE_PLAYING && previous === PHASE_DEAD) {
-        runOnJS(setGameOver)(null);
+        runOnJS(handleRetry)();
       }
     },
   );
 
-  const spriteWidth = height * config.helicopter.spriteSize.width;
-  const spriteHeight = height * config.helicopter.spriteSize.height;
-  const heliX = width * config.helicopter.fixedXRatio - spriteWidth / 2;
-  const heliY = useDerivedValue(
-    () => renderY.value * height - spriteHeight / 2,
+  // A tier step UP means a graze just banked — reward it with a light tick.
+  useAnimatedReaction(
+    () => tierIndex.value,
+    (current, previous) => {
+      if (previous !== null && current > previous) {
+        runOnJS(hapticGraze)();
+      }
+    },
   );
 
-  const tileWidth = height * config.world.backgroundTileRatio;
-  const stripeCount = Math.ceil(width / (2 * tileWidth)) + 1;
-  const wallPx = height * config.world.wallThickness;
+  const heliCenterX = width * config.helicopter.fixedXRatio;
+
+  /** Seconds since death — negative while flying. Drives crash + shake. */
+  const crashT = useDerivedValue(() =>
+    phase.value === PHASE_DEAD
+      ? (wallClockMs.value - deathAtMs.value) / 1000
+      : -1,
+  );
+  const shakeTransform = useScreenShake(crashT);
 
   // HUD layout (cosmetic) — a left-aligned column under the top wall.
   const hudX = width * 0.06;
@@ -192,91 +151,110 @@ export function GameScreen() {
     <View style={styles.root}>
       <GestureDetector gesture={gesture}>
         <Canvas style={styles.canvas}>
-          <Fill color={COLORS.background} />
-          {Array.from({ length: stripeCount }, (_, i) => (
-            <Stripe
-              key={i}
-              index={i}
-              tileWidth={tileWidth}
-              screenHeight={height}
+          <Group transform={shakeTransform}>
+            <Background
+              width={width}
+              height={height}
+              renderScrollX={renderScrollX}
+              wallClockMs={wallClockMs}
+            />
+            {pinches.map((slot, i) => (
+              <Pinch
+                key={i}
+                slot={slot}
+                index={i}
+                screenHeight={height}
+                renderScrollX={renderScrollX}
+              />
+            ))}
+            {rocks.map((slot, i) => (
+              <Rock
+                key={i}
+                slot={slot}
+                screenHeight={height}
+                renderScrollX={renderScrollX}
+              />
+            ))}
+            <CaveWalls
+              width={width}
+              height={height}
               renderScrollX={renderScrollX}
             />
-          ))}
-          {rocks.map((slot, i) => (
-            <Rock
-              key={i}
-              slot={slot}
+            <Helicopter
+              centerX={heliCenterX}
               screenHeight={height}
-              renderScrollX={renderScrollX}
+              renderY={renderY}
+              velY={velY}
+              phase={phase}
+              wallClockMs={wallClockMs}
             />
-          ))}
-          {pinches.map((slot, i) => (
-            <Pinch
-              key={i}
-              slot={slot}
+            <CrashEffect
+              centerX={heliCenterX}
               screenHeight={height}
-              renderScrollX={renderScrollX}
+              renderY={renderY}
+              crashT={crashT}
             />
-          ))}
-          <Rect x={0} y={0} width={width} height={wallPx} color={COLORS.rock} />
-          <Rect
-            x={0}
-            y={height - wallPx}
-            width={width}
-            height={wallPx}
-            color={COLORS.rock}
-          />
-          <Rect
-            x={heliX}
-            y={heliY}
-            width={spriteWidth}
-            height={spriteHeight}
-            color={COLORS.helicopter}
-          />
+          </Group>
           <SkiaText
             x={hudX}
             y={hudTop}
             text={scoreText}
             font={scoreFont}
-            color={COLORS.hud}
+            color={theme.colors.hud}
           />
           <SkiaText
             x={hudX}
             y={hudTop + 32}
             text={multiplierText}
             font={multiplierFont}
-            color={AMBER}
+            color={theme.colors.amber}
           />
           <Rect
             x={hudX}
             y={barY}
             width={barMaxWidth}
             height={barHeight}
-            color={COLORS.stripe}
+            color={theme.colors.wallInner}
           />
           <Rect
             x={hudX}
             y={barY}
             width={barWidth}
             height={barHeight}
-            color={AMBER}
+            color={theme.colors.amber}
           />
           <SkiaText
             x={hudX}
             y={barY + 26}
             text={distanceText}
             font={distanceFont}
-            color={COLORS.hud}
+            color={theme.colors.hud}
           />
         </Canvas>
       </GestureDetector>
       {gameOver !== null && (
-        <View style={styles.overlay} pointerEvents="none">
-          <Text style={styles.overlayTitle}>GAME OVER</Text>
-          <Text style={styles.overlayScore}>{gameOver.score}</Text>
-          <Text style={styles.overlayDistance}>{gameOver.distance} m</Text>
-          <Text style={styles.overlayHint}>TAP TO RETRY</Text>
-        </View>
+        <Animated.View
+          style={styles.overlay}
+          pointerEvents="box-none"
+          entering={FadeIn.delay(theme.crash.overlayDelayMs).duration(
+            theme.crash.overlayFadeMs,
+          )}
+        >
+          <View style={styles.overlayPanel} pointerEvents="box-none">
+            <Text style={styles.overlayTitle}>GAME OVER</Text>
+            <Text style={styles.overlayScore}>{gameOver.score}</Text>
+            <Text style={styles.overlayDistance}>{gameOver.distance} m</Text>
+            <Text style={styles.overlayHint}>TAP TO RETRY</Text>
+            <View style={styles.overlayMenuButton}>
+              <GameButton
+                label="MENU"
+                variant="secondary"
+                compact
+                onPress={onExitToMenu}
+              />
+            </View>
+          </View>
+        </Animated.View>
       )}
     </View>
   );
@@ -285,6 +263,7 @@ export function GameScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    backgroundColor: theme.colors.backgroundTop,
   },
   canvas: {
     flex: 1,
@@ -297,7 +276,16 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(13, 17, 23, 0.72)',
+    backgroundColor: 'rgba(7, 9, 13, 0.6)',
+  },
+  overlayPanel: {
+    alignItems: 'center',
+    paddingVertical: 36,
+    paddingHorizontal: 48,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 182, 72, 0.25)',
+    backgroundColor: 'rgba(14, 19, 27, 0.85)',
   },
   overlayTitle: {
     color: '#dce3ec',
@@ -323,5 +311,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 3,
     marginTop: 28,
+  },
+  overlayMenuButton: {
+    marginTop: 22,
   },
 });

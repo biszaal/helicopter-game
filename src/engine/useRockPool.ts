@@ -19,6 +19,9 @@ export interface RockSlot {
   cleared: SharedValue<number>;
   /** 1 if the hitbox entered this rock's graze band while passing. */
   armed: SharedValue<number>;
+  /** Cosmetic random seed (0..1) set at spawn — picks the rock's shape
+   * variant in the renderer. Never read by gameplay code. */
+  seed: SharedValue<number>;
 }
 
 export function useRockPool(): RockSlot[] {
@@ -35,6 +38,7 @@ export function useRockPool(): RockSlot[] {
       halfH: useSharedValue(0),
       cleared: useSharedValue(0),
       armed: useSharedValue(0),
+      seed: useSharedValue(0),
     });
   }
   return slots;
