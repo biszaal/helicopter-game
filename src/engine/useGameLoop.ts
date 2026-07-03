@@ -113,13 +113,15 @@ export function useGameLoop(aspectRatio: number): GameLoop {
   const rocks = useRockPool();
   const pinches = usePinchPool();
 
-  const spawnPinch = (scroll: number) => {
+  const activatePinch = (
+    worldX: number,
+    spurs: { topLen: number; botLen: number },
+  ) => {
     'worklet';
     for (let i = 0; i < pinches.length; i++) {
       const p = pinches[i];
       if (p.active.value === 0) {
-        const spurs = pinchSpurs(scroll, Math.random);
-        p.worldX.value = scroll + aspectRatio;
+        p.worldX.value = worldX;
         p.length.value = config.pinch.lengthShu;
         p.topLen.value = spurs.topLen;
         p.botLen.value = spurs.botLen;
@@ -129,6 +131,24 @@ export function useGameLoop(aspectRatio: number): GameLoop {
         p.active.value = 1;
         return;
       }
+    }
+  };
+
+  const spawnPinch = (scroll: number) => {
+    'worklet';
+    const dp = config.behaviors.doublePinch;
+    const enterX = scroll + aspectRatio;
+    if (zoneIndexAt(scroll) >= dp.unlockZone && Math.random() < dp.chance) {
+      // An S-curve: two spans, corridors offset to opposite sides. The
+      // stretch between them sits inside both rock-free margins.
+      const c = doublePinchCentres(scroll, Math.random);
+      activatePinch(enterX, spursFor(c.first, c.gap));
+      activatePinch(
+        enterX + config.pinch.lengthShu + dp.gapBetween,
+        spursFor(c.second, c.gap),
+      );
+    } else {
+      activatePinch(enterX, pinchSpurs(scroll, Math.random));
     }
   };
 
