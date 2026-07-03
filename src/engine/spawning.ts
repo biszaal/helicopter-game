@@ -46,6 +46,26 @@ export function pinchGapAt(distanceShu: number): number {
   return rampAt(distanceShu, config.difficulty.pinchGap);
 }
 
+/** Clamp a corridor centre so both spurs stay inside the playfield. */
+function clampCentre(centre: number, gap: number): number {
+  'worklet';
+  const wall = config.world.wallThickness;
+  const minCentre = wall + gap / 2;
+  const maxCentre = 1 - wall - gap / 2;
+  if (centre < minCentre) return minCentre;
+  if (centre > maxCentre) return maxCentre;
+  return centre;
+}
+
+/** Spur lengths for a corridor of `gap` centred at `centre`. */
+export function spursFor(
+  centre: number,
+  gap: number,
+): { topLen: number; botLen: number } {
+  'worklet';
+  return { topLen: centre - gap / 2, botLen: 1 - (centre + gap / 2) };
+}
+
 /**
  * Stalactite/stalagmite lengths for a pinch spawned at the given run
  * distance. The corridor centre is jittered but clamped so both spurs stay
@@ -58,13 +78,101 @@ export function pinchSpurs(
 ): { topLen: number; botLen: number } {
   'worklet';
   const gap = pinchGapAt(distanceShu);
+  const centre = clampCentre(
+    0.5 + (rng() * 2 - 1) * config.pinch.centerJitter,
+    gap,
+  );
+  return spursFor(centre, gap);
+}
+
+/**
+ * Corridor centres for an S-curve pinch pair (zone "THE DEEP"): the first
+ * is jittered like a single pinch, the second is pushed centerOffset toward
+ * the other side of the tunnel. Both clamped inside the playfield.
+ */
+export function doublePinchCentres(
+  distanceShu: number,
+  rng: () => number,
+): { gap: number; first: number; second: number } {
+  'worklet';
+  const gap = pinchGapAt(distanceShu);
+  const first = clampCentre(
+    0.5 + (rng() * 2 - 1) * config.pinch.centerJitter,
+    gap,
+  );
+  const offset = config.behaviors.doublePinch.centerOffset;
+  const second = clampCentre(
+    first >= 0.5 ? first - offset : first + offset,
+    gap,
+  );
+  return { gap, first, second };
+}
+
+/**
+ * Pick a y for a rock wall's gap so the gap band clears every blocker near
+ * the wall's x span. Returns null when nothing fits — the wall is skipped
+ * (the tunnel is never sealed).
+ */
+export function placeWallGap(
+  x1: number,
+  x2: number,
+  gapHalf: number,
+  occupied: OccupiedRect[],
+  rng: () => number,
+): number | null {
+  'worklet';
   const wall = config.world.wallThickness;
-  const minCentre = wall + gap / 2;
-  const maxCentre = 1 - wall - gap / 2;
-  let centre = 0.5 + (rng() * 2 - 1) * config.pinch.centerJitter;
-  if (centre < minCentre) centre = minCentre;
-  if (centre > maxCentre) centre = maxCentre;
-  return { topLen: centre - gap / 2, botLen: 1 - (centre + gap / 2) };
+  const xWindow = config.obstacles.xClearWindow;
+  const minY = wall + gapHalf;
+  const maxY = 1 - wall - gapHalf;
+  if (maxY <= minY) return null;
+
+  const tries = config.behaviors.rockWall.placementTries;
+  for (let attempt = 0; attempt < tries; attempt++) {
+    const y = minY + rng() * (maxY - minY);
+    let blocked = false;
+    for (let i = 0; i < occupied.length; i++) {
+      const o = occupied[i];
+      if (
+        o.x1 < x2 + xWindow &&
+        o.x2 > x1 - xWindow &&
+        o.y1 < y + gapHalf &&
+        o.y2 > y - gapHalf
+      ) {
+        blocked = true;
+        break;
+      }
+    }
+    if (!blocked) return y;
+  }
+  return null;
+}
+
+/**
+ * Tile the tunnel above and below a wall gap with rock segments. Segments
+ * split each band evenly (≈ segmentHalfH each) and never enter the gap.
+ * Called at spawn time — allocation is fine there.
+ */
+export function wallSegments(
+  gapCenter: number,
+  gapHalf: number,
+  segmentHalfH: number,
+): { centerY: number; halfH: number }[] {
+  'worklet';
+  const wall = config.world.wallThickness;
+  const segments: { centerY: number; halfH: number }[] = [];
+  const bandY1 = [wall, gapCenter + gapHalf];
+  const bandY2 = [gapCenter - gapHalf, 1 - wall];
+  for (let b = 0; b < 2; b++) {
+    const height = bandY2[b] - bandY1[b];
+    if (height <= 1e-6) continue;
+    const count = Math.max(1, Math.ceil(height / (2 * segmentHalfH)));
+    const halfH = height / (2 * count);
+    for (let i = 0; i < count; i++) {
+      segments.push({ centerY: bandY1[b] + (2 * i + 1) * halfH, halfH });
+    }
+  }
+  return segments;
 }
 
 /**

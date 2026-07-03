@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'vitest';
 import {
+  doublePinchCentres,
+  placeWallGap,
+  spursFor,
+  wallSegments,
   pinchGapAt,
   placeRock,
   rampAt,
@@ -78,5 +82,90 @@ describe('placeRock clearance parameter', () => {
   });
   test('placement is rejected when the demanded clearance cannot survive', () => {
     expect(placeRock(0, 0.2, 0.05, occupied, rng, 1.5)).toBeNull();
+  });
+});
+
+function makeRng(values: number[]): () => number {
+  let i = 0;
+  return () => (i < values.length ? values[i++] : 0.5);
+}
+
+describe('spursFor', () => {
+  test('spur lengths and the gap tile the tunnel exactly', () => {
+    const { topLen, botLen } = spursFor(0.4, 0.2);
+    expect(topLen).toBeCloseTo(0.3);
+    expect(botLen).toBeCloseTo(0.5);
+    expect(topLen + 0.2 + botLen).toBeCloseTo(1);
+  });
+});
+
+describe('doublePinchCentres', () => {
+  test('second centre is pushed toward the other side', () => {
+    // rng 1 → first centre jitters fully down-screen (0.5 + 0.15 = 0.65)
+    const c = doublePinchCentres(0, makeRng([1]));
+    expect(c.first).toBeCloseTo(0.65);
+    expect(c.second).toBeCloseTo(0.65 - 0.22);
+  });
+  test('a first centre above mid pushes the second the other way', () => {
+    const c = doublePinchCentres(0, makeRng([0]));
+    expect(c.first).toBeCloseTo(0.35);
+    expect(c.second).toBeCloseTo(0.35 + 0.22);
+  });
+  test('both centres keep spurs inside the playfield at the gap floor', () => {
+    // 10000 shu → gap at floor 0.18; extreme jitter must still clamp.
+    const c = doublePinchCentres(10_000, makeRng([1]));
+    const wall = 0.045;
+    for (const centre of [c.first, c.second]) {
+      expect(centre - c.gap / 2).toBeGreaterThanOrEqual(wall);
+      expect(centre + c.gap / 2).toBeLessThanOrEqual(1 - wall);
+    }
+  });
+});
+
+describe('placeWallGap', () => {
+  test('accepts a spot clear of nearby blockers', () => {
+    // rng 0.5 → gap centre mid-tunnel; nothing occupied.
+    expect(placeWallGap(1, 1.1, 0.11, [], makeRng([0.5]))).toBeCloseTo(0.5);
+  });
+  test('rejects spots overlapping a blocker, then retries', () => {
+    // A blocker at mid-tunnel in the same x window; first try (0.5)
+    // collides, second try (0.1) is clear.
+    const occupied = [{ x1: 1, x2: 1.1, y1: 0.45, y2: 0.55 }];
+    const y = placeWallGap(1, 1.1, 0.05, occupied, makeRng([0.5, 0.1]));
+    expect(y).not.toBeNull();
+    expect(Math.abs((y as number) - 0.5)).toBeGreaterThan(0.1);
+  });
+  test('returns null when every try is blocked', () => {
+    const occupied = [{ x1: 1, x2: 1.1, y1: 0, y2: 1 }];
+    expect(placeWallGap(1, 1.1, 0.11, occupied, makeRng([]))).toBeNull();
+  });
+  test('far-away blockers are ignored', () => {
+    const occupied = [{ x1: 5, x2: 5.1, y1: 0, y2: 1 }];
+    expect(placeWallGap(1, 1.1, 0.11, occupied, makeRng([0.5]))).not.toBeNull();
+  });
+});
+
+describe('wallSegments', () => {
+  const wall = 0.045;
+  test('tiles both bands exactly, never entering the gap', () => {
+    const segs = wallSegments(0.5, 0.11, 0.055);
+    expect(segs.length).toBeGreaterThan(0);
+    for (const s of segs) {
+      const top = s.centerY - s.halfH;
+      const bottom = s.centerY + s.halfH;
+      expect(top).toBeGreaterThanOrEqual(wall - 1e-9);
+      expect(bottom).toBeLessThanOrEqual(1 - wall + 1e-9);
+      const inGap = top < 0.5 + 0.11 - 1e-9 && bottom > 0.5 - 0.11 + 1e-9;
+      expect(inGap).toBe(false);
+    }
+    // Coverage: total segment height equals tunnel height minus the gap.
+    const covered = segs.reduce((sum, s) => sum + 2 * s.halfH, 0);
+    expect(covered).toBeCloseTo(1 - 2 * wall - 0.22);
+  });
+  test('a gap flush against a wall leaves that band empty', () => {
+    const segs = wallSegments(wall + 0.11, 0.11, 0.055);
+    for (const s of segs) {
+      expect(s.centerY - s.halfH).toBeGreaterThanOrEqual(wall + 0.22 - 1e-9);
+    }
   });
 });
