@@ -36,6 +36,10 @@ export async function initAudio(): Promise<void> {
   click.volume = 0.7;
   rotor.volume = ROTOR_BASE_VOLUME;
   rotor.loop = true;
+  // Varispeed, not time-stretch: with pitch correction on (the default),
+  // rate changes warble the loop and hold the pitch flat — the opposite of
+  // a rotor spooling up. Off = faster playback and a natural pitch rise.
+  rotor.shouldCorrectPitch = false;
   crash.volume = 0.9;
   zone.volume = 0.8;
   players = { click, rotor, crash, zone };
