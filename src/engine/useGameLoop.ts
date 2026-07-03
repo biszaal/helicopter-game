@@ -8,10 +8,14 @@ import { stepPhysics } from './physics';
 import { rectsOverlap } from './collision';
 import { applyGrazes, stepDecay } from './scoring';
 import {
+  doublePinchCentres,
   pinchSpurs,
   placeRock,
+  placeWallGap,
   rampAt,
   sizeScaleAt,
+  spursFor,
+  wallSegments,
   zoneIndexAt,
   type OccupiedRect,
 } from './spawning';
@@ -212,6 +216,75 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     }
   };
 
+  const spawnWall = (scroll: number) => {
+    'worklet';
+    const wallCfg = config.behaviors.rockWall;
+    const halfW = wallCfg.segmentHalfW;
+    const centreX = scroll + aspectRatio + halfW;
+
+    // Pinches own their stretch of tunnel — same exclusion as single rocks.
+    const margin = config.pinch.rockFreeMargin;
+    for (let i = 0; i < pinches.length; i++) {
+      const p = pinches[i];
+      if (p.active.value === 0) continue;
+      const px1 = p.worldX.value - margin;
+      const px2 = p.worldX.value + p.length.value + margin;
+      if (centreX + halfW > px1 && centreX - halfW < px2) return;
+    }
+
+    // Blockers near the wall's span (drift envelopes included).
+    const occupied: OccupiedRect[] = [];
+    for (let i = 0; i < rocks.length; i++) {
+      const r = rocks[i];
+      if (r.active.value === 0) continue;
+      occupied.push({
+        x1: r.worldX.value - r.halfW.value,
+        x2: r.worldX.value + r.halfW.value,
+        y1: r.baseCenterY.value - r.halfH.value - r.driftAmp.value,
+        y2: r.baseCenterY.value + r.halfH.value + r.driftAmp.value,
+      });
+    }
+
+    const gapHalf =
+      (rampAt(scroll, config.difficulty.clearance) * wallCfg.gapScale) / 2;
+    const gapCenter = placeWallGap(
+      centreX - halfW,
+      centreX + halfW,
+      gapHalf,
+      occupied,
+      Math.random,
+    );
+    if (gapCenter === null) return; // never seal the tunnel — skip instead
+
+    const segments = wallSegments(gapCenter, gapHalf, wallCfg.segmentHalfH);
+
+    // All-or-nothing: a wall with holes reads as a bug, not a mercy.
+    let free = 0;
+    for (let i = 0; i < rocks.length; i++) {
+      if (rocks[i].active.value === 0) free++;
+    }
+    if (free < segments.length) return;
+
+    let s = 0;
+    for (let i = 0; i < rocks.length && s < segments.length; i++) {
+      const r = rocks[i];
+      if (r.active.value !== 0) continue;
+      const seg = segments[s++];
+      r.worldX.value = centreX;
+      r.centerY.value = seg.centerY;
+      r.baseCenterY.value = seg.centerY;
+      r.driftAmp.value = 0;
+      r.driftFreq.value = 0;
+      r.driftPhase.value = 0;
+      r.halfW.value = halfW;
+      r.halfH.value = seg.halfH;
+      r.cleared.value = 0;
+      r.armed.value = 0;
+      r.seed.value = Math.random(); // cosmetic: shape variant
+      r.active.value = 1;
+    }
+  };
+
   const resetRun = () => {
     'worklet';
     posY.value = config.helicopter.startYRatio;
@@ -292,7 +365,17 @@ export function useGameLoop(aspectRatio: number): GameLoop {
           now +
           interval *
             (1 + (Math.random() * 2 - 1) * config.obstacles.spawnIntervalJitter);
-        spawnRock(scroll);
+        const wallCfg = config.behaviors.rockWall;
+        if (
+          zoneIndexAt(scroll) >= wallCfg.unlockZone &&
+          Math.random() < wallCfg.chance
+        ) {
+          spawnWall(scroll);
+          // A wall is a set piece — give the player a beat after it.
+          nextRockAt.value = now + interval * wallCfg.postWallBreather;
+        } else {
+          spawnRock(scroll);
+        }
       }
       if (now >= nextPinchAt.value) {
         const interval = rampAt(scroll, config.difficulty.pinchInterval);
