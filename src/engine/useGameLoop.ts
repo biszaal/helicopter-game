@@ -138,6 +138,15 @@ export function useGameLoop(aspectRatio: number): GameLoop {
       (baseHeight / 2) * scale * (1 + (Math.random() * 2 - 1) * sizeJitter);
     const centreX = scroll + aspectRatio + halfW;
 
+    // Zone unlock: some rocks bob vertically. The solver reserves the FULL
+    // travel envelope so the guaranteed corridor is never invaded mid-bob.
+    const drift = config.behaviors.drift;
+    const drifts =
+      zoneIndexAt(scroll) >= drift.unlockZone && Math.random() < drift.chance;
+    const driftAmp = drifts
+      ? drift.ampMin + Math.random() * (drift.ampMax - drift.ampMin)
+      : 0;
+
     // Pinches own their stretch of tunnel — no rocks inside a span.
     const margin = config.pinch.rockFreeMargin;
     for (let i = 0; i < pinches.length; i++) {
@@ -156,8 +165,8 @@ export function useGameLoop(aspectRatio: number): GameLoop {
       occupied.push({
         x1: r.worldX.value - r.halfW.value,
         x2: r.worldX.value + r.halfW.value,
-        y1: r.centerY.value - r.halfH.value,
-        y2: r.centerY.value + r.halfH.value,
+        y1: r.baseCenterY.value - r.halfH.value - r.driftAmp.value,
+        y2: r.baseCenterY.value + r.halfH.value + r.driftAmp.value,
       });
     }
     for (let i = 0; i < pinches.length; i++) {
@@ -172,7 +181,7 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     const y = placeRock(
       centreX - halfW,
       centreX + halfW,
-      halfH,
+      halfH + driftAmp, // reserve the whole bob envelope
       occupied,
       Math.random,
       rampAt(scroll, config.difficulty.clearance),
@@ -184,6 +193,14 @@ export function useGameLoop(aspectRatio: number): GameLoop {
       if (r.active.value === 0) {
         r.worldX.value = centreX;
         r.centerY.value = y;
+        r.baseCenterY.value = y;
+        r.driftAmp.value = driftAmp;
+        r.driftFreq.value = drifts
+          ? (2 * Math.PI) /
+            (drift.periodMin +
+              Math.random() * (drift.periodMax - drift.periodMin))
+          : 0;
+        r.driftPhase.value = drifts ? Math.random() * Math.PI * 2 : 0;
         r.halfW.value = halfW;
         r.halfH.value = halfH;
         r.cleared.value = 0;
@@ -296,6 +313,12 @@ export function useGameLoop(aspectRatio: number): GameLoop {
       for (let i = 0; i < rocks.length; i++) {
         const rock = rocks[i];
         if (rock.active.value === 0) continue;
+        if (rock.driftAmp.value > 0) {
+          rock.centerY.value =
+            rock.baseCenterY.value +
+            rock.driftAmp.value *
+              Math.sin(rock.driftFreq.value * now + rock.driftPhase.value);
+        }
         const screenX = rock.worldX.value - scroll;
         const halfW = rock.halfW.value;
         const halfH = rock.halfH.value;
