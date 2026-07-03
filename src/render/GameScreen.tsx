@@ -25,10 +25,12 @@ import { hapticCrash, hapticGraze, hapticZone } from '../audio/haptics';
 import {
   playCrash,
   playZoneChime,
+  setRotorIntensity,
   startRotor,
   stopRotor,
 } from '../audio/sounds';
 import { config } from '../config';
+import { rampAt } from '../engine/spawning';
 import {
   PHASE_DEAD,
   PHASE_PLAYING,
@@ -150,6 +152,21 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
     (current, previous) => {
       if (previous !== null && current > previous) {
         runOnJS(handleZoneChange)(current);
+      }
+    },
+  );
+
+  // Rotor pitch/volume track the scroll-speed ramp. Quantized to 1/20 steps
+  // so runOnJS fires every few seconds, never per frame.
+  useAnimatedReaction(
+    () => {
+      const ramp = config.difficulty.scrollSpeed;
+      const speed = rampAt(scrollX.value, ramp);
+      return Math.round(((speed - ramp.start) / (ramp.cap - ramp.start)) * 20);
+    },
+    (bucket, previous) => {
+      if (previous !== null && bucket !== previous) {
+        runOnJS(setRotorIntensity)(bucket / 20);
       }
     },
   );
