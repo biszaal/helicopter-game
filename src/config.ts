@@ -63,8 +63,9 @@ export const config = {
     baseHeight: 0.055,
     /** Per-rock random ± fraction on each dimension (shape variety). */
     sizeJitter: 0.4,
-    /** Pooled rock slots — reused, never allocated during play. */
-    poolSize: 14,
+    /** Pooled rock slots — reused, never allocated during play. Sized for a
+     * rock wall bursting ~10 segments at once plus loose rocks in flight. */
+    poolSize: 24,
     // The guaranteed-corridor height lives in difficulty.clearance (it ramps).
     /** Rocks within this x distance (shu) count as the same "wall" for the
      * corridor guarantee. */
@@ -89,8 +90,8 @@ export const config = {
     lengthShu: 0.5,
     /** Random ± offset of the corridor centre from mid-tunnel (shu). */
     centerJitter: 0.15,
-    /** Pooled pinch slots. */
-    poolSize: 3,
+    /** Pooled pinch slots — an S-curve pair holds two at once. */
+    poolSize: 4,
     /** No rocks spawn within a pinch span ± this margin (shu). */
     rockFreeMargin: 0.18,
   },
@@ -146,6 +147,59 @@ export const config = {
     pinchGap: { start: 0.4, perShu: -0.004, cap: 0.18 },
     /** Mean seconds between pinches. */
     pinchInterval: { start: 14, perShu: -0.08, cap: 10 },
+  },
+
+  behaviors: {
+    // Each zone unlocks one new obstacle behavior — deeper zones play
+    // differently, not just faster. Indexes refer to config.zones.
+    /** Zone 1 "THE DRIFT": some rocks bob vertically. The corridor solver
+     * reserves each drifting rock's FULL travel envelope, so the guaranteed
+     * corridor is never invaded mid-bob. */
+    drift: {
+      unlockZone: 1,
+      /** Fraction of rock spawns that drift once unlocked. */
+      chance: 0.45,
+      /** Bob amplitude range (shu). */
+      ampMin: 0.03,
+      ampMax: 0.07,
+      /** Bob period range (s). */
+      periodMin: 2.5,
+      periodMax: 4.5,
+    },
+    /** Zone 2 "THE WALLS": a stack of rocks spans the tunnel with exactly
+     * one gap — a gate to thread. */
+    rockWall: {
+      unlockZone: 2,
+      /** Fraction of rock spawns replaced by a wall once unlocked. */
+      chance: 0.16,
+      /** Gap height = clearance ramp × this (a gate, not a needle: at the
+       * clearance floor 0.13 the gap is ≈ 0.22 shu). */
+      gapScale: 1.7,
+      /** Half height of each stacked segment (shu). */
+      segmentHalfH: 0.055,
+      /** Half width of every segment (shu). */
+      segmentHalfW: 0.05,
+      /** Random gap positions tried before the wall is skipped. */
+      placementTries: 6,
+      /** Next rock interval is stretched by this after a wall — a beat to
+       * recover. */
+      postWallBreather: 1.5,
+    },
+    /** Zone 3 "THE DEEP": pinches arrive as offset pairs — an S-curve.
+     * Reachability: at cap speed 0.95 the 0.3 shu between spans takes
+     * 0.32 s; max vertical speed 1.3 covers 0.41 shu ≥ centerOffset with
+     * ~2× slack. */
+    doublePinch: {
+      unlockZone: 3,
+      /** Fraction of pinch spawns that become a pair once unlocked. */
+      chance: 0.6,
+      /** Tunnel between the two spans (shu). Must stay < 2 × rockFreeMargin
+       * so the whole S stays rock-free. */
+      gapBetween: 0.3,
+      /** The second corridor centre is pushed this far toward the other
+       * side of the tunnel (shu). */
+      centerOffset: 0.22,
+    },
   },
 } as const;
 

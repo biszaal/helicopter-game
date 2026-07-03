@@ -10,8 +10,15 @@ export interface RockSlot {
   active: SharedValue<number>;
   /** Rock centre x, world-space shu (scroll subtracts from it). */
   worldX: SharedValue<number>;
-  /** Rock centre y (shu from the top). */
+  /** Rock centre y (shu from the top) — live value, bobs while drifting. */
   centerY: SharedValue<number>;
+  /** Anchor y for the vertical bob (equals centerY for static rocks). */
+  baseCenterY: SharedValue<number>;
+  /** Bob amplitude (shu) — 0 for static rocks. */
+  driftAmp: SharedValue<number>;
+  /** Bob angular frequency (rad/s) and phase (rad). */
+  driftFreq: SharedValue<number>;
+  driftPhase: SharedValue<number>;
   /** Half extents (shu) — per-rock random size, grows over a run. */
   halfW: SharedValue<number>;
   halfH: SharedValue<number>;
@@ -34,6 +41,10 @@ export function useRockPool(): RockSlot[] {
       active: useSharedValue(0),
       worldX: useSharedValue(0),
       centerY: useSharedValue(0),
+      baseCenterY: useSharedValue(0),
+      driftAmp: useSharedValue(0),
+      driftFreq: useSharedValue(0),
+      driftPhase: useSharedValue(0),
       halfW: useSharedValue(0),
       halfH: useSharedValue(0),
       cleared: useSharedValue(0),
