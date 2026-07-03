@@ -23,6 +23,12 @@ export function hapticGraze(): void {
   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 }
 
+/** Zone milestone: a medium thump — bigger than a graze, smaller than death. */
+export function hapticZone(): void {
+  if (!hapticsOn) return;
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+}
+
 /** Death. */
 export function hapticCrash(): void {
   if (!hapticsOn) return;

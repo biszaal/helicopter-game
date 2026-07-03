@@ -82,6 +82,8 @@ export const theme = {
   ],
   /** Palette crossfade duration at a zone boundary (s). */
   zoneTransitionSeconds: 2.5,
+  /** Zone announcement overlay: fade in / hold / fade out (s). */
+  zoneAnnounce: { fadeInSeconds: 0.35, holdSeconds: 1.6, fadeOutSeconds: 0.55 },
 
   background: {
     /** Parallax layers: scroll factor relative to the world, silhouette

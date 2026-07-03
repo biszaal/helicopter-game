@@ -18,10 +18,16 @@ import Animated, {
   FadeIn,
   runOnJS,
   useAnimatedReaction,
+  useAnimatedStyle,
   useDerivedValue,
 } from 'react-native-reanimated';
-import { hapticCrash, hapticGraze } from '../audio/haptics';
-import { playCrash, startRotor, stopRotor } from '../audio/sounds';
+import { hapticCrash, hapticGraze, hapticZone } from '../audio/haptics';
+import {
+  playCrash,
+  playZoneChime,
+  startRotor,
+  stopRotor,
+} from '../audio/sounds';
 import { config } from '../config';
 import {
   PHASE_DEAD,
@@ -82,6 +88,10 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
     score: number;
     distance: number;
   } | null>(null);
+  const [announce, setAnnounce] = useState<{
+    name: string;
+    meters: number;
+  } | null>(null);
 
   // The rotor runs whenever this screen is up and the helicopter is alive.
   useEffect(() => {
@@ -124,6 +134,41 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
       }
     },
   );
+
+  // Zone milestone: announce it, chime, thump. `current > previous` keeps
+  // the reset back to zone 0 on retry silent.
+  const handleZoneChange = (zone: number) => {
+    setAnnounce({
+      name: config.zones[zone].name,
+      meters: config.zones[zone].atMeters,
+    });
+    playZoneChime();
+    hapticZone();
+  };
+  useAnimatedReaction(
+    () => zoneIndex.value,
+    (current, previous) => {
+      if (previous !== null && current > previous) {
+        runOnJS(handleZoneChange)(current);
+      }
+    },
+  );
+
+  // Announcement opacity — a pure function of the wall clock, no timers.
+  const announceStyle = useAnimatedStyle(() => {
+    const a = theme.zoneAnnounce;
+    if (zoneChangedAtMs.value === 0) return { opacity: 0 };
+    const t = (wallClockMs.value - zoneChangedAtMs.value) / 1000;
+    let opacity = 0;
+    if (t >= 0 && t < a.fadeInSeconds) {
+      opacity = t / a.fadeInSeconds;
+    } else if (t < a.fadeInSeconds + a.holdSeconds) {
+      opacity = 1;
+    } else if (t < a.fadeInSeconds + a.holdSeconds + a.fadeOutSeconds) {
+      opacity = 1 - (t - a.fadeInSeconds - a.holdSeconds) / a.fadeOutSeconds;
+    }
+    return { opacity };
+  });
 
   const heliCenterX = width * config.helicopter.fixedXRatio;
 
@@ -253,6 +298,15 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
           />
         </Canvas>
       </GestureDetector>
+      {announce !== null && (
+        <Animated.View
+          style={[styles.announce, announceStyle]}
+          pointerEvents="none"
+        >
+          <Text style={styles.announceName}>{announce.name}</Text>
+          <Text style={styles.announceMeters}>{announce.meters} m</Text>
+        </Animated.View>
+      )}
       {gameOver !== null && (
         <Animated.View
           style={styles.overlay}
@@ -288,6 +342,28 @@ const styles = StyleSheet.create({
   },
   canvas: {
     flex: 1,
+  },
+  announce: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  announceName: {
+    color: '#dce3ec',
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: 8,
+  },
+  announceMeters: {
+    color: '#ffb648',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 3,
+    marginTop: 6,
   },
   overlay: {
     position: 'absolute',
