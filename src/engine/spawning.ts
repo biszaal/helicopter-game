@@ -8,6 +8,32 @@ export interface OccupiedRect {
   y2: number;
 }
 
+/** A linear-with-cap difficulty dial: value = start + perShu·distance,
+ * clamped at cap. perShu may be negative — then cap is a floor. */
+export interface Ramp {
+  start: number;
+  perShu: number;
+  cap: number;
+}
+
+/** Dial value after d shu of scroll — every difficulty curve in the game. */
+export function rampAt(d: number, ramp: Ramp): number {
+  'worklet';
+  const v = ramp.start + ramp.perShu * d;
+  return ramp.perShu >= 0 ? Math.min(v, ramp.cap) : Math.max(v, ramp.cap);
+}
+
+/** Which zone (index into config.zones) a run at this distance is in. */
+export function zoneIndexAt(distanceShu: number): number {
+  'worklet';
+  const meters = distanceShu * config.scoring.metersPerShu;
+  let index = 0;
+  for (let i = 1; i < config.zones.length; i++) {
+    if (meters >= config.zones[i].atMeters) index = i;
+  }
+  return index;
+}
+
 /** "Rocks get bigger over time": size multiplier at a given run time. */
 export function sizeScaleAt(elapsedSeconds: number): number {
   'worklet';

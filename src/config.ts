@@ -129,6 +129,16 @@ export const config = {
     decayStepSeconds: 1.0,
   },
 
+  zones: [
+    // Named stretches of cave, by distance. The cave runs 55–95 m/s
+    // (metersPerShu = 100), so boundaries are set by wall-clock feel:
+    // ~25 s / ~57 s / ~89 s into a run at ramp pace.
+    { atMeters: 0, name: 'SHALLOWS' },
+    { atMeters: 1500, name: 'THE DRIFT' },
+    { atMeters: 4000, name: 'THE WALLS' },
+    { atMeters: 7000, name: 'THE DEEP' },
+  ],
+
   difficulty: {
     // "Obstacles get bigger over time": rock dimensions scale with run time.
     /** Rock size growth per second of run time (fraction of base size). */
