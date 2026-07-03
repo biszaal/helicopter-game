@@ -56,6 +56,8 @@ export interface GameLoop {
   zoneIndex: SharedValue<number>;
   /** wallClockMs at the last zone change (0 until the first crossing). */
   zoneChangedAtMs: SharedValue<number>;
+  /** The zone before the current one — palette crossfades read both. */
+  prevZoneIndex: SharedValue<number>;
   /** Pooled world objects, for rendering. */
   rocks: RockSlot[];
   pinches: PinchSlot[];
@@ -97,6 +99,7 @@ export function useGameLoop(aspectRatio: number): GameLoop {
 
   const zoneIndex = useSharedValue(0);
   const zoneChangedAtMs = useSharedValue(0);
+  const prevZoneIndex = useSharedValue(0);
 
   const score = useSharedValue(0);
   const tierIndex = useSharedValue(0);
@@ -208,6 +211,7 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     nextPinchAt.value = config.pinch.firstAtSeconds;
     zoneIndex.value = 0;
     zoneChangedAtMs.value = 0;
+    prevZoneIndex.value = 0;
     for (let i = 0; i < rocks.length; i++) {
       rocks[i].active.value = 0;
     }
@@ -415,6 +419,7 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     // Zone crossings — once per frame is plenty (boundaries are metres apart).
     const zone = zoneIndexAt(scroll);
     if (zone !== zoneIndex.value) {
+      prevZoneIndex.value = zoneIndex.value;
       zoneIndex.value = zone;
       zoneChangedAtMs.value = frame.timestamp;
     }
@@ -450,6 +455,7 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     deathAtMs,
     zoneIndex,
     zoneChangedAtMs,
+    prevZoneIndex,
     rocks,
     pinches,
     resetRun,
