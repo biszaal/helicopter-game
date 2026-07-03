@@ -5,7 +5,7 @@ import {
   Rect,
   Text as SkiaText,
 } from '@shopify/react-native-skia';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Platform,
   StyleSheet,
@@ -66,9 +66,17 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
     wallClockMs,
     deathAtMs,
     zoneIndex,
+    zoneChangedAtMs,
+    prevZoneIndex,
     rocks,
     pinches,
   } = loop;
+
+  /** Stable bundle of the shared values the palette crossfade reads. */
+  const zoneBlend = useMemo(
+    () => ({ zoneIndex, prevZoneIndex, zoneChangedAtMs, wallClockMs }),
+    [zoneIndex, prevZoneIndex, zoneChangedAtMs, wallClockMs],
+  );
 
   const [gameOver, setGameOver] = useState<{
     score: number;
@@ -159,6 +167,7 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
               height={height}
               renderScrollX={renderScrollX}
               wallClockMs={wallClockMs}
+              zoneBlend={zoneBlend}
             />
             {pinches.map((slot, i) => (
               <Pinch
@@ -167,6 +176,7 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
                 index={i}
                 screenHeight={height}
                 renderScrollX={renderScrollX}
+                zoneBlend={zoneBlend}
               />
             ))}
             {rocks.map((slot, i) => (
@@ -175,12 +185,14 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
                 slot={slot}
                 screenHeight={height}
                 renderScrollX={renderScrollX}
+                zoneBlend={zoneBlend}
               />
             ))}
             <CaveWalls
               width={width}
               height={height}
               renderScrollX={renderScrollX}
+              zoneBlend={zoneBlend}
             />
             <Helicopter
               centerX={heliCenterX}

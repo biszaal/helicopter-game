@@ -11,12 +11,15 @@ import { useMemo } from 'react';
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
 import { makeRidgePath } from './shapes';
 import { theme } from './theme';
+import { useZoneColor, type ZoneBlend } from './zonePalette';
 
 interface BackgroundProps {
   width: number;
   height: number;
   renderScrollX: SharedValue<number>;
   wallClockMs: SharedValue<number>;
+  /** Omitted on menu screens — the backdrop stays in the first zone. */
+  zoneBlend?: ZoneBlend;
 }
 
 interface RidgeCopyProps {
@@ -24,7 +27,7 @@ interface RidgeCopyProps {
   index: number;
   tileWidth: number;
   speed: number;
-  color: string;
+  color: SharedValue<string> | string;
   height: number;
   mirrored: boolean;
   renderScrollX: SharedValue<number>;
@@ -100,7 +103,14 @@ export function Background({
   height,
   renderScrollX,
   wallClockMs,
+  zoneBlend,
 }: BackgroundProps) {
+  const bgTop = useZoneColor(zoneBlend, 'backgroundTop');
+  const bgBottom = useZoneColor(zoneBlend, 'backgroundBottom');
+  const bgColors = useDerivedValue(() => [bgTop.value, bgBottom.value]);
+  const ridgeFar = useZoneColor(zoneBlend, 'ridgeFar');
+  const ridgeNear = useZoneColor(zoneBlend, 'ridgeNear');
+
   const layers = useMemo(
     () =>
       theme.background.layers.map((layer, li) => {
@@ -132,11 +142,7 @@ export function Background({
   return (
     <>
       <Rect x={0} y={0} width={width} height={height}>
-        <LinearGradient
-          start={vec(0, 0)}
-          end={vec(0, height)}
-          colors={[theme.colors.backgroundTop, theme.colors.backgroundBottom]}
-        />
+        <LinearGradient start={vec(0, 0)} end={vec(0, height)} colors={bgColors} />
       </Rect>
       {layers.map((layer, li) =>
         Array.from({ length: layer.copies }, (_, i) => (
@@ -146,7 +152,7 @@ export function Background({
               index={i}
               tileWidth={layer.tileWidth}
               speed={layer.speed}
-              color={layer.color}
+              color={li === 0 ? ridgeFar : ridgeNear}
               height={height}
               mirrored={false}
               renderScrollX={renderScrollX}
@@ -157,7 +163,7 @@ export function Background({
               index={i}
               tileWidth={layer.tileWidth}
               speed={layer.speed}
-              color={layer.color}
+              color={li === 0 ? ridgeFar : ridgeNear}
               height={height}
               mirrored
               renderScrollX={renderScrollX}

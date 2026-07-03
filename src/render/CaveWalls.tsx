@@ -11,11 +11,13 @@ import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
 import { config } from '../config';
 import { makeToothEdgePath } from './shapes';
 import { theme } from './theme';
+import { useZoneColor, type ZoneBlend } from './zonePalette';
 
 interface CaveWallsProps {
   width: number;
   height: number;
   renderScrollX: SharedValue<number>;
+  zoneBlend: ZoneBlend;
 }
 
 interface TeethCopyProps {
@@ -27,6 +29,7 @@ interface TeethCopyProps {
   mirrored: boolean;
   renderScrollX: SharedValue<number>;
   screenHeight: number;
+  color: SharedValue<string>;
 }
 
 /** One wrap-scrolling tile of teeth along a wall's collision edge. */
@@ -38,6 +41,7 @@ function TeethCopy({
   mirrored,
   renderScrollX,
   screenHeight,
+  color,
 }: TeethCopyProps) {
   const transform = useDerivedValue(() => {
     const scrollPx = renderScrollX.value * screenHeight;
@@ -48,7 +52,7 @@ function TeethCopy({
   });
   return (
     <Group transform={transform}>
-      <Path path={path} color={theme.colors.wallInner} />
+      <Path path={path} color={color} />
     </Group>
   );
 }
@@ -59,7 +63,20 @@ function TeethCopy({
  * collision line into the playfield and are purely cosmetic — brushing a
  * tooth tip is a survivable close call, never an invisible death.
  */
-export function CaveWalls({ width, height, renderScrollX }: CaveWallsProps) {
+export function CaveWalls({
+  width,
+  height,
+  renderScrollX,
+  zoneBlend,
+}: CaveWallsProps) {
+  const wallOuter = useZoneColor(zoneBlend, 'wallOuter');
+  const wallInner = useZoneColor(zoneBlend, 'wallInner');
+  const topGradient = useDerivedValue(() => [wallOuter.value, wallInner.value]);
+  const bottomGradient = useDerivedValue(() => [
+    wallInner.value,
+    wallOuter.value,
+  ]);
+
   const wallPx = height * config.world.wallThickness;
   const toothDepth = theme.walls.toothDepth * height;
   const tileWidth = theme.walls.tileWidth * height;
@@ -80,14 +97,14 @@ export function CaveWalls({ width, height, renderScrollX }: CaveWallsProps) {
         <LinearGradient
           start={vec(0, 0)}
           end={vec(0, wallPx)}
-          colors={[theme.colors.wallOuter, theme.colors.wallInner]}
+          colors={topGradient}
         />
       </Rect>
       <Rect x={0} y={height - wallPx} width={width} height={wallPx}>
         <LinearGradient
           start={vec(0, height - wallPx)}
           end={vec(0, height)}
-          colors={[theme.colors.wallInner, theme.colors.wallOuter]}
+          colors={bottomGradient}
         />
       </Rect>
       {Array.from({ length: copies }, (_, i) => (
@@ -100,6 +117,7 @@ export function CaveWalls({ width, height, renderScrollX }: CaveWallsProps) {
             mirrored={false}
             renderScrollX={renderScrollX}
             screenHeight={height}
+            color={wallInner}
           />
           <TeethCopy
             path={bottomTeeth}
@@ -109,6 +127,7 @@ export function CaveWalls({ width, height, renderScrollX }: CaveWallsProps) {
             mirrored
             renderScrollX={renderScrollX}
             screenHeight={height}
+            color={wallInner}
           />
         </Group>
       ))}

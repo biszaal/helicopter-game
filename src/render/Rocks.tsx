@@ -7,7 +7,7 @@ import {
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
 import { type RockSlot } from '../engine/useRockPool';
 import { makeRockPaths, ROCK_VARIANTS } from './shapes';
-import { theme } from './theme';
+import { useZoneColor, type ZoneBlend } from './zonePalette';
 
 /** Built once at load — the renderer only ever picks from these. */
 const ROCK_PATHS = makeRockPaths();
@@ -16,6 +16,7 @@ interface RockProps {
   slot: RockSlot;
   screenHeight: number;
   renderScrollX: SharedValue<number>;
+  zoneBlend: ZoneBlend;
 }
 
 /**
@@ -23,7 +24,11 @@ interface RockProps {
  * rect. The outline is inscribed in the rect (never larger), so combined
  * with the helicopter's hitbox margin, collisions always look deserved.
  */
-export function Rock({ slot, screenHeight, renderScrollX }: RockProps) {
+export function Rock({ slot, screenHeight, renderScrollX, zoneBlend }: RockProps) {
+  const rockLit = useZoneColor(zoneBlend, 'rockLit');
+  const rockDark = useZoneColor(zoneBlend, 'rockDark');
+  const fillColors = useDerivedValue(() => [rockLit.value, rockDark.value]);
+
   const transform = useDerivedValue(() => {
     if (slot.active.value === 0) {
       return [{ translateX: -2 * screenHeight }];
@@ -49,7 +54,7 @@ export function Rock({ slot, screenHeight, renderScrollX }: RockProps) {
         <LinearGradient
           start={vec(0.1, 0.05)}
           end={vec(0.9, 1)}
-          colors={[theme.colors.rockLit, theme.colors.rockDark]}
+          colors={fillColors}
         />
       </Path>
     </Group>

@@ -35,12 +35,61 @@ export const theme = {
     amber: '#ffb648',
   },
 
+  /** Per-zone cave palettes (indexes match config.zones). zones[0] mirrors
+   * the base colors above; later zones shift the mood:
+   * deep blue → cold teal → ember amber → red glow. */
+  zones: [
+    {
+      backgroundTop: '#07090d',
+      backgroundBottom: '#131a24',
+      ridgeFar: '#0e131b',
+      ridgeNear: '#161d28',
+      wallOuter: '#1c222c',
+      wallInner: '#2e3743',
+      rockLit: '#39434f',
+      rockDark: '#1e242e',
+    },
+    {
+      backgroundTop: '#040c0c',
+      backgroundBottom: '#0d2124',
+      ridgeFar: '#091a1b',
+      ridgeNear: '#102528',
+      wallOuter: '#152a2c',
+      wallInner: '#25444a',
+      rockLit: '#2f5257',
+      rockDark: '#16292c',
+    },
+    {
+      backgroundTop: '#0c0805',
+      backgroundBottom: '#231910',
+      ridgeFar: '#19120b',
+      ridgeNear: '#281e11',
+      wallOuter: '#2b2013',
+      wallInner: '#453420',
+      rockLit: '#54422b',
+      rockDark: '#2b2013',
+    },
+    {
+      backgroundTop: '#0c0507',
+      backgroundBottom: '#250d12',
+      ridgeFar: '#1b0a0e',
+      ridgeNear: '#2b1116',
+      wallOuter: '#2f1318',
+      wallInner: '#4b1f28',
+      rockLit: '#59292f',
+      rockDark: '#2d1317',
+    },
+  ],
+  /** Palette crossfade duration at a zone boundary (s). */
+  zoneTransitionSeconds: 2.5,
+
   background: {
     /** Parallax layers: scroll factor relative to the world, silhouette
-     * height and tile width (all heights in shu, i.e. × screenHeight px). */
+     * height and tile width (all heights in shu, i.e. × screenHeight px).
+     * Ridge colors come from the zone palette (layer 0 far, layer 1 near). */
     layers: [
-      { speed: 0.3, maxHeight: 0.24, tileWidth: 1.1, color: '#0e131b' },
-      { speed: 0.6, maxHeight: 0.15, tileWidth: 0.8, color: '#161d28' },
+      { speed: 0.3, maxHeight: 0.24, tileWidth: 1.1 },
+      { speed: 0.6, maxHeight: 0.15, tileWidth: 0.8 },
     ],
     dustCount: 12,
     /** Motes drift slightly slower than the world — reads as depth. */
