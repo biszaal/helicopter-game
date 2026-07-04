@@ -43,6 +43,7 @@ import { Background } from './Background';
 import { GameButton } from './GameButton';
 import { CaveWalls } from './CaveWalls';
 import { CrashEffect, useScreenShake } from './CrashEffect';
+import { GrazePulse, GrazeSparks } from './GrazeSparks';
 import { Helicopter } from './Helicopter';
 import { Pinch } from './Pinches';
 import { Rock } from './Rocks';
@@ -77,6 +78,9 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
     zoneIndex,
     zoneChangedAtMs,
     prevZoneIndex,
+    grazeAtMs,
+    grazeY,
+    grazeSeed,
     rocks,
     pinches,
   } = loop;
@@ -267,6 +271,14 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
               phase={phase}
               wallClockMs={wallClockMs}
             />
+            <GrazeSparks
+              centerX={heliCenterX}
+              screenHeight={height}
+              grazeY={grazeY}
+              grazeSeed={grazeSeed}
+              grazeAtMs={grazeAtMs}
+              wallClockMs={wallClockMs}
+            />
             <CrashEffect
               centerX={heliCenterX}
               screenHeight={height}
@@ -274,6 +286,13 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
               crashT={crashT}
             />
           </Group>
+          <GrazePulse
+            width={width}
+            height={height}
+            tierIndex={tierIndex}
+            grazeAtMs={grazeAtMs}
+            wallClockMs={wallClockMs}
+          />
           <SkiaText
             x={hudX}
             y={hudTop}

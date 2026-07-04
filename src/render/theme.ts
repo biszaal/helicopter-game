@@ -122,6 +122,30 @@ export const theme = {
     blinkOnFraction: 0.18,
   },
 
+  /** Graze feedback: spark burst streaking back off the helicopter. */
+  sparks: {
+    count: 7,
+    /** Burst fade-out time (s). */
+    lifetime: 0.35,
+    /** Backward streak speed range (shu/s). */
+    speedMin: 0.25,
+    speedMax: 0.55,
+    /** Half-angle of the backward fan (rad). */
+    spread: 0.5,
+    /** Spark radius range (shu). */
+    sizeMin: 0.004,
+    sizeMax: 0.009,
+  },
+
+  /** Amber edge glow on tier-ups at high multipliers. */
+  grazePulse: {
+    /** Tier index (into multiplierTiers) where the pulse starts — 5 = ×6. */
+    minTierIndex: 5,
+    inSeconds: 0.08,
+    outSeconds: 0.35,
+    maxOpacity: 0.3,
+  },
+
   crash: {
     shardCount: 16,
     /** Shard fade-out time (s) — the whole effect is over by then. */
