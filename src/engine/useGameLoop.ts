@@ -62,6 +62,12 @@ export interface GameLoop {
   zoneChangedAtMs: SharedValue<number>;
   /** The zone before the current one — palette crossfades read both. */
   prevZoneIndex: SharedValue<number>;
+  /** Wall clock (ms) of the last banked graze — 0 until one banks. */
+  grazeAtMs: SharedValue<number>;
+  /** Helicopter centre y (shu) at that moment — the spark burst origin. */
+  grazeY: SharedValue<number>;
+  /** 0..1 per-burst seed — cosmetic variety only. */
+  grazeSeed: SharedValue<number>;
   /** Pooled world objects, for rendering. */
   rocks: RockSlot[];
   pinches: PinchSlot[];
@@ -104,6 +110,11 @@ export function useGameLoop(aspectRatio: number): GameLoop {
   const zoneIndex = useSharedValue(0);
   const zoneChangedAtMs = useSharedValue(0);
   const prevZoneIndex = useSharedValue(0);
+
+  /** Last banked graze: wall clock (0 = none), heli y (shu), 0..1 seed. */
+  const grazeAtMs = useSharedValue(0);
+  const grazeY = useSharedValue(0);
+  const grazeSeed = useSharedValue(0);
 
   const score = useSharedValue(0);
   const tierIndex = useSharedValue(0);
@@ -322,6 +333,7 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     zoneIndex.value = 0;
     zoneChangedAtMs.value = 0;
     prevZoneIndex.value = 0;
+    grazeAtMs.value = 0;
     for (let i = 0; i < rocks.length; i++) {
       rocks[i].active.value = 0;
     }
@@ -453,6 +465,9 @@ export function useGameLoop(aspectRatio: number): GameLoop {
             tier = combo.tierIndex;
             dTimer = combo.decayTimer;
             dThreshold = combo.decayThreshold;
+            grazeAtMs.value = frame.timestamp;
+            grazeY.value = pos;
+            grazeSeed.value = Math.random();
           }
         }
         if (screenX + halfW < -grazeDist) {
@@ -507,6 +522,9 @@ export function useGameLoop(aspectRatio: number): GameLoop {
             tier = combo.tierIndex;
             dTimer = combo.decayTimer;
             dThreshold = combo.decayThreshold;
+            grazeAtMs.value = frame.timestamp;
+            grazeY.value = pos;
+            grazeSeed.value = Math.random();
           }
         }
         if (left + len < -grazeDist) {
@@ -582,6 +600,9 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     zoneIndex,
     zoneChangedAtMs,
     prevZoneIndex,
+    grazeAtMs,
+    grazeY,
+    grazeSeed,
     rocks,
     pinches,
     resetRun,
