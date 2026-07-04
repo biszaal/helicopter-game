@@ -1,4 +1,10 @@
-import { Circle, RadialGradient, Rect, vec } from '@shopify/react-native-skia';
+import {
+  Circle,
+  Group,
+  RadialGradient,
+  Rect,
+  vec,
+} from '@shopify/react-native-skia';
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
 import { mulberry32 } from './shapes';
 import { theme } from './theme';
@@ -124,14 +130,21 @@ export function GrazePulse({
       ? (t / inSeconds) * maxOpacity
       : maxOpacity * (1 - (t - inSeconds) / outSeconds);
   });
+  // Parked off-screen while idle — a full-screen gradient is real fill-rate
+  // even at opacity 0.
+  const transform = useDerivedValue(() =>
+    opacity.value > 0 ? [{ translateX: 0 }] : [{ translateX: -3 * width }],
+  );
   return (
-    <Rect x={0} y={0} width={width} height={height} opacity={opacity}>
-      <RadialGradient
-        c={vec(width / 2, height / 2)}
-        r={0.75 * Math.max(width, height)}
-        colors={['rgba(255, 182, 72, 0)', 'rgba(255, 182, 72, 0.55)']}
-        positions={[0.55, 1]}
-      />
-    </Rect>
+    <Group transform={transform}>
+      <Rect x={0} y={0} width={width} height={height} opacity={opacity}>
+        <RadialGradient
+          c={vec(width / 2, height / 2)}
+          r={0.75 * Math.max(width, height)}
+          colors={['rgba(255, 182, 72, 0)', 'rgba(255, 182, 72, 0.55)']}
+          positions={[0.55, 1]}
+        />
+      </Rect>
+    </Group>
   );
 }

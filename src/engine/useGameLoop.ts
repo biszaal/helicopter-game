@@ -567,6 +567,24 @@ export function useGameLoop(aspectRatio: number): GameLoop {
       zoneIndex.value = zone;
       zoneChangedAtMs.value = frame.timestamp;
     }
+
+    // Retire finished effect windows: zeroed timestamps put the render
+    // layer's event-driven derived values back on their idle paths.
+    if (
+      zoneChangedAtMs.value !== 0 &&
+      frame.timestamp - zoneChangedAtMs.value >
+        config.events.zoneTransitionSeconds * MS_PER_SECOND
+    ) {
+      prevZoneIndex.value = zoneIndex.value;
+      zoneChangedAtMs.value = 0;
+    }
+    if (
+      grazeAtMs.value !== 0 &&
+      frame.timestamp - grazeAtMs.value >
+        config.events.grazeEffectSeconds * MS_PER_SECOND
+    ) {
+      grazeAtMs.value = 0;
+    }
     score.value = runScore;
     tierIndex.value = tier;
     decayTimer.value = dTimer;

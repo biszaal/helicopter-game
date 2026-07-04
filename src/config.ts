@@ -120,6 +120,17 @@ export const config = {
     decayStepSeconds: 1.0,
   },
 
+  events: {
+    // Windows (s) after which the engine zeroes an effect timestamp so the
+    // render layer's derived values idle on their cheap early-return paths
+    // instead of interpolating forever. Cosmetic durations in theme.ts must
+    // fit inside these windows.
+    /** Zone palette crossfade + announcement window. */
+    zoneTransitionSeconds: 2.5,
+    /** Graze sparks + edge pulse window. */
+    grazeEffectSeconds: 0.6,
+  },
+
   zones: [
     // Named stretches of cave, by distance. The cave runs 55–95 m/s
     // (metersPerShu = 100), so boundaries are set by wall-clock feel:

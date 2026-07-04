@@ -48,6 +48,7 @@ import { Helicopter } from './Helicopter';
 import { Pinch } from './Pinches';
 import { Rock } from './Rocks';
 import { theme } from './theme';
+import { useZoneColor } from './zonePalette';
 
 const fontFamily = Platform.select({ ios: 'Helvetica', default: 'sans-serif' });
 const scoreFont = matchFont({ fontFamily, fontSize: 34, fontWeight: 'bold' });
@@ -90,6 +91,27 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
     () => ({ zoneIndex, prevZoneIndex, zoneChangedAtMs, wallClockMs }),
     [zoneIndex, prevZoneIndex, zoneChangedAtMs, wallClockMs],
   );
+
+  // Each palette color is derived ONCE here and shared by every consumer —
+  // 24 rocks reading one value, not 24 rocks deriving their own copies.
+  const bgTop = useZoneColor(zoneBlend, 'backgroundTop');
+  const bgBottom = useZoneColor(zoneBlend, 'backgroundBottom');
+  const bgColors = useDerivedValue(() => [bgTop.value, bgBottom.value]);
+  const ridgeFar = useZoneColor(zoneBlend, 'ridgeFar');
+  const ridgeNear = useZoneColor(zoneBlend, 'ridgeNear');
+  const wallOuter = useZoneColor(zoneBlend, 'wallOuter');
+  const wallInner = useZoneColor(zoneBlend, 'wallInner');
+  const wallTopGradient = useDerivedValue(() => [
+    wallOuter.value,
+    wallInner.value,
+  ]);
+  const wallBottomGradient = useDerivedValue(() => [
+    wallInner.value,
+    wallOuter.value,
+  ]);
+  const rockLit = useZoneColor(zoneBlend, 'rockLit');
+  const rockDark = useZoneColor(zoneBlend, 'rockDark');
+  const rockFill = useDerivedValue(() => [rockLit.value, rockDark.value]);
 
   const [gameOver, setGameOver] = useState<{
     score: number;
@@ -236,7 +258,9 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
               height={height}
               renderScrollX={renderScrollX}
               wallClockMs={wallClockMs}
-              zoneBlend={zoneBlend}
+              bgColors={bgColors}
+              ridgeFar={ridgeFar}
+              ridgeNear={ridgeNear}
             />
             {pinches.map((slot, i) => (
               <Pinch
@@ -245,7 +269,7 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
                 index={i}
                 screenHeight={height}
                 renderScrollX={renderScrollX}
-                zoneBlend={zoneBlend}
+                color={wallInner}
               />
             ))}
             {rocks.map((slot, i) => (
@@ -254,14 +278,16 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
                 slot={slot}
                 screenHeight={height}
                 renderScrollX={renderScrollX}
-                zoneBlend={zoneBlend}
+                fill={rockFill}
               />
             ))}
             <CaveWalls
               width={width}
               height={height}
               renderScrollX={renderScrollX}
-              zoneBlend={zoneBlend}
+              topGradient={wallTopGradient}
+              bottomGradient={wallBottomGradient}
+              teethColor={wallInner}
             />
             <Helicopter
               centerX={heliCenterX}

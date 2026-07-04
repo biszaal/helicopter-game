@@ -5,7 +5,6 @@ import { config } from '../config';
 import { type PinchSlot } from '../engine/usePinchPool';
 import { makeToothEdgePath } from './shapes';
 import { theme } from './theme';
-import { useZoneColor, type ZoneBlend } from './zonePalette';
 
 interface PinchProps {
   slot: PinchSlot;
@@ -13,7 +12,8 @@ interface PinchProps {
   index: number;
   screenHeight: number;
   renderScrollX: SharedValue<number>;
-  zoneBlend: ZoneBlend;
+  /** Zone-crossfaded wall color, derived once by GameScreen. */
+  color: SharedValue<string>;
 }
 
 /**
@@ -27,9 +27,8 @@ export function Pinch({
   index,
   screenHeight,
   renderScrollX,
-  zoneBlend,
+  color,
 }: PinchProps) {
-  const wallInner = useZoneColor(zoneBlend, 'wallInner');
   const lengthPx = config.pinch.lengthShu * screenHeight;
   const toothDepth = theme.walls.toothDepth * screenHeight;
   const teeth = useMemo(
@@ -60,13 +59,13 @@ export function Pinch({
 
   return (
     <>
-      <Rect x={x} y={0} width={w} height={topH} color={wallInner} />
-      <Rect x={x} y={botY} width={w} height={botH} color={wallInner} />
+      <Rect x={x} y={0} width={w} height={topH} color={color} />
+      <Rect x={x} y={botY} width={w} height={botH} color={color} />
       <Group transform={topTeethTransform}>
-        <Path path={teeth} color={wallInner} />
+        <Path path={teeth} color={color} />
       </Group>
       <Group transform={bottomTeethTransform}>
-        <Path path={teeth} color={wallInner} />
+        <Path path={teeth} color={color} />
       </Group>
     </>
   );

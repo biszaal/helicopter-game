@@ -11,13 +11,15 @@ import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
 import { config } from '../config';
 import { makeToothEdgePath } from './shapes';
 import { theme } from './theme';
-import { useZoneColor, type ZoneBlend } from './zonePalette';
 
 interface CaveWallsProps {
   width: number;
   height: number;
   renderScrollX: SharedValue<number>;
-  zoneBlend: ZoneBlend;
+  /** Zone-crossfaded colors, derived once by GameScreen. */
+  topGradient: SharedValue<string[]>;
+  bottomGradient: SharedValue<string[]>;
+  teethColor: SharedValue<string>;
 }
 
 interface TeethCopyProps {
@@ -67,16 +69,10 @@ export function CaveWalls({
   width,
   height,
   renderScrollX,
-  zoneBlend,
+  topGradient,
+  bottomGradient,
+  teethColor,
 }: CaveWallsProps) {
-  const wallOuter = useZoneColor(zoneBlend, 'wallOuter');
-  const wallInner = useZoneColor(zoneBlend, 'wallInner');
-  const topGradient = useDerivedValue(() => [wallOuter.value, wallInner.value]);
-  const bottomGradient = useDerivedValue(() => [
-    wallInner.value,
-    wallOuter.value,
-  ]);
-
   const wallPx = height * config.world.wallThickness;
   const toothDepth = theme.walls.toothDepth * height;
   const tileWidth = theme.walls.tileWidth * height;
@@ -117,7 +113,7 @@ export function CaveWalls({
             mirrored={false}
             renderScrollX={renderScrollX}
             screenHeight={height}
-            color={wallInner}
+            color={teethColor}
           />
           <TeethCopy
             path={bottomTeeth}
@@ -127,7 +123,7 @@ export function CaveWalls({
             mirrored
             renderScrollX={renderScrollX}
             screenHeight={height}
-            color={wallInner}
+            color={teethColor}
           />
         </Group>
       ))}
