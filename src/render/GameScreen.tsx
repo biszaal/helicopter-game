@@ -24,6 +24,7 @@ import Animated, {
 import { hapticCrash, hapticGraze, hapticZone } from '../audio/haptics';
 import {
   playCrash,
+  playWhoosh,
   playZoneChime,
   setRotorIntensity,
   startRotor,
@@ -127,12 +128,13 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
     },
   );
 
-  // A tier step UP means a graze just banked — reward it with a light tick.
+  // A tier step UP means a graze just banked — a light tick and an air-cut.
   useAnimatedReaction(
     () => tierIndex.value,
     (current, previous) => {
       if (previous !== null && current > previous) {
         runOnJS(hapticGraze)();
+        runOnJS(playWhoosh)();
       }
     },
   );

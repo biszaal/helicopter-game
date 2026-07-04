@@ -17,6 +17,7 @@ let players: {
   rotor: AudioPlayer;
   crash: AudioPlayer;
   zone: AudioPlayer;
+  whoosh: AudioPlayer;
 } | null = null;
 
 const ROTOR_BASE_VOLUME = 0.45;
@@ -33,6 +34,7 @@ export async function initAudio(): Promise<void> {
   const rotor = createAudioPlayer(require('../../assets/sounds/rotor-loop.wav'));
   const crash = createAudioPlayer(require('../../assets/sounds/crash.wav'));
   const zone = createAudioPlayer(require('../../assets/sounds/zone.wav'));
+  const whoosh = createAudioPlayer(require('../../assets/sounds/whoosh.wav'));
   click.volume = 0.7;
   rotor.volume = ROTOR_BASE_VOLUME;
   rotor.loop = true;
@@ -42,7 +44,8 @@ export async function initAudio(): Promise<void> {
   rotor.shouldCorrectPitch = false;
   crash.volume = 0.9;
   zone.volume = 0.8;
-  players = { click, rotor, crash, zone };
+  whoosh.volume = 0.5;
+  players = { click, rotor, crash, zone, whoosh };
 }
 
 export function setSoundEnabled(on: boolean): void {
@@ -69,6 +72,13 @@ export function setRotorIntensity(progress: number): void {
   const p = Math.min(1, Math.max(0, progress));
   players.rotor.setPlaybackRate(1 + ROTOR_RATE_SPAN * p);
   players.rotor.volume = ROTOR_BASE_VOLUME * (1 + ROTOR_VOLUME_SPAN * p);
+}
+
+/** Graze banked — a quick air-cut past the rock. */
+export function playWhoosh(): void {
+  if (!soundOn || players === null) return;
+  players.whoosh.seekTo(0);
+  players.whoosh.play();
 }
 
 /** Zone milestone chime. */
