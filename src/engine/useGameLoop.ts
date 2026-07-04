@@ -28,6 +28,9 @@ export const MS_PER_SECOND = 1000;
 
 export const PHASE_PLAYING = 0;
 export const PHASE_DEAD = 1;
+/** Frozen mid-run: the loop's PHASE_PLAYING guard skips stepping, the wall
+ * clock keeps ticking, and setting the phase back resumes seamlessly. */
+export const PHASE_PAUSED = 2;
 
 export interface GameLoop {
   /** Interpolated helicopter centre (shu) — what the renderer should draw. */

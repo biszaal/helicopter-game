@@ -34,6 +34,7 @@ import { config } from '../config';
 import { rampAt } from '../engine/spawning';
 import {
   PHASE_DEAD,
+  PHASE_PAUSED,
   PHASE_PLAYING,
   useGameLoop,
 } from '../engine/useGameLoop';
@@ -121,6 +122,22 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
     name: string;
     meters: number;
   } | null>(null);
+  const [paused, setPaused] = useState(false);
+
+  // Pause/resume run on the JS thread (buttons): flipping the phase is all
+  // the engine needs — its PHASE_PLAYING guard freezes the world in place.
+  const pauseGame = () => {
+    if (phase.value !== PHASE_PLAYING) return;
+    phase.value = PHASE_PAUSED;
+    setPaused(true);
+    stopRotor();
+  };
+  const resumeGame = () => {
+    if (phase.value !== PHASE_PAUSED) return;
+    phase.value = PHASE_PLAYING;
+    setPaused(false);
+    startRotor();
+  };
 
   // The rotor runs whenever this screen is up and the helicopter is alive.
   useEffect(() => {
@@ -371,6 +388,39 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
           <Text style={styles.announceMeters}>{announce.meters} m</Text>
         </Animated.View>
       )}
+      {gameOver === null && !paused && (
+        <View
+          style={[
+            styles.pauseButton,
+            { top: height * 0.055, right: width * 0.05 },
+          ]}
+        >
+          <GameButton
+            label="PAUSE"
+            variant="secondary"
+            compact
+            onPress={pauseGame}
+          />
+        </View>
+      )}
+      {paused && (
+        <Animated.View style={styles.overlay} entering={FadeIn.duration(150)}>
+          <View style={styles.overlayPanel}>
+            <Text style={styles.overlayTitle}>PAUSED</Text>
+            <View style={styles.overlayMenuButton}>
+              <GameButton label="RESUME" onPress={resumeGame} />
+            </View>
+            <View style={styles.overlayMenuButton}>
+              <GameButton
+                label="MENU"
+                variant="secondary"
+                compact
+                onPress={onExitToMenu}
+              />
+            </View>
+          </View>
+        </Animated.View>
+      )}
       {gameOver !== null && (
         <Animated.View
           style={styles.overlay}
@@ -406,6 +456,9 @@ const styles = StyleSheet.create({
   },
   canvas: {
     flex: 1,
+  },
+  pauseButton: {
+    position: 'absolute',
   },
   announce: {
     position: 'absolute',
