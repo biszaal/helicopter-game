@@ -6,7 +6,7 @@ were processed (mono mix, trim, normalize, loop crossfade, WAV encode) on
 
 | File | Derived from | Source | License |
 | --- | --- | --- | --- |
-| `rotor-loop.wav` | `helicopter.mp3` — steadiest 4 s window, tail-to-head equal-power crossfade for seamless looping | ["Helicopter Sounds"](https://opengameart.org/content/helicopter-sounds) on OpenGameArt.org | CC0 |
+| `rotor-loop.wav` | `helicopter.mp3` — steadiest 4 s window, tail-to-head equal-power crossfade for seamless looping; tiled 8× (32 s) so the native queue-looper churns items rarely | ["Helicopter Sounds"](https://opengameart.org/content/helicopter-sounds) on OpenGameArt.org | CC0 |
 | `click.wav` | `click_001.ogg` from the Interface Sounds pack | [Kenney — Interface Sounds](https://kenney.nl/assets/interface-sounds) | CC0 |
 | `crash.wav` | `explosionCrunch_004.ogg` from the Sci-Fi Sounds pack | [Kenney — Sci-Fi Sounds](https://kenney.nl/assets/sci-fi-sounds) | CC0 |
 | `zone.wav` | Synthesized for this project (two-note sine bell, Node script) | — | CC0 / public domain |

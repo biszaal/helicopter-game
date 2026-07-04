@@ -184,18 +184,17 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
     },
   );
 
-  // Rotor pitch/volume track the scroll-speed ramp. Quantized to 1/60 steps:
-  // each is ~7 cents of pitch — inaudible on the noisy loop — and runOnJS
-  // still only fires about once a second, never per frame.
+  // Rotor volume tracks the scroll-speed ramp. Quantized to 1/20 steps so
+  // runOnJS fires every few seconds, never per frame.
   useAnimatedReaction(
     () => {
       const ramp = config.difficulty.scrollSpeed;
       const speed = rampAt(scrollX.value, ramp);
-      return Math.round(((speed - ramp.start) / (ramp.cap - ramp.start)) * 60);
+      return Math.round(((speed - ramp.start) / (ramp.cap - ramp.start)) * 20);
     },
     (bucket, previous) => {
       if (previous !== null && bucket !== previous) {
-        runOnJS(setRotorIntensity)(bucket / 60);
+        runOnJS(setRotorIntensity)(bucket / 20);
       }
     },
   );

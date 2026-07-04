@@ -21,27 +21,44 @@ let players: {
 } | null = null;
 
 const ROTOR_BASE_VOLUME = 0.45;
-/** At full scroll-speed ramp the rotor spins 25% faster (pitch rises too —
- * no pitch correction on purpose) and plays 20% louder. */
-const ROTOR_RATE_SPAN = 0.25;
-const ROTOR_VOLUME_SPAN = 0.2;
+/** Extra rotor volume at the full scroll-speed ramp (fraction of base).
+ * Intensity is volume-ONLY by design: every AVPlayer rate change is an
+ * audible discontinuity and the looper churns queue items per cycle, so
+ * playbackRate modulation made the loop stutter and warble. Volume changes
+ * are click-free. */
+const ROTOR_VOLUME_SPAN = 0.35;
+
+/** Status updates are unused — a long interval keeps the native periodic
+ * time observer and its JS events out of the frame budget. */
+const PLAYER_OPTIONS = { updateInterval: 60000 };
 
 /** Idempotent. Call once at app start, before any play call matters. */
 export async function initAudio(): Promise<void> {
   if (players !== null) return;
   await setAudioModeAsync({ playsInSilentMode: true });
-  const click = createAudioPlayer(require('../../assets/sounds/click.wav'));
-  const rotor = createAudioPlayer(require('../../assets/sounds/rotor-loop.wav'));
-  const crash = createAudioPlayer(require('../../assets/sounds/crash.wav'));
-  const zone = createAudioPlayer(require('../../assets/sounds/zone.wav'));
-  const whoosh = createAudioPlayer(require('../../assets/sounds/whoosh.wav'));
+  const click = createAudioPlayer(
+    require('../../assets/sounds/click.wav'),
+    PLAYER_OPTIONS,
+  );
+  const rotor = createAudioPlayer(
+    require('../../assets/sounds/rotor-loop.wav'),
+    PLAYER_OPTIONS,
+  );
+  const crash = createAudioPlayer(
+    require('../../assets/sounds/crash.wav'),
+    PLAYER_OPTIONS,
+  );
+  const zone = createAudioPlayer(
+    require('../../assets/sounds/zone.wav'),
+    PLAYER_OPTIONS,
+  );
+  const whoosh = createAudioPlayer(
+    require('../../assets/sounds/whoosh.wav'),
+    PLAYER_OPTIONS,
+  );
   click.volume = 0.7;
   rotor.volume = ROTOR_BASE_VOLUME;
   rotor.loop = true;
-  // Varispeed, not time-stretch: with pitch correction on (the default),
-  // rate changes warble the loop and hold the pitch flat — the opposite of
-  // a rotor spooling up. Off = faster playback and a natural pitch rise.
-  rotor.shouldCorrectPitch = false;
   crash.volume = 0.9;
   zone.volume = 0.8;
   whoosh.volume = 0.5;
@@ -66,11 +83,10 @@ export function startRotor(): void {
   players.rotor.play();
 }
 
-/** Rotor urgency mapped from the scroll-speed ramp progress (0–1). */
+/** Rotor urgency from the scroll-speed ramp progress (0–1) — volume only. */
 export function setRotorIntensity(progress: number): void {
   if (players === null) return;
   const p = Math.min(1, Math.max(0, progress));
-  players.rotor.setPlaybackRate(1 + ROTOR_RATE_SPAN * p);
   players.rotor.volume = ROTOR_BASE_VOLUME * (1 + ROTOR_VOLUME_SPAN * p);
 }
 
