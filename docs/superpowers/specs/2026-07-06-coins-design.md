@@ -56,8 +56,10 @@ pillar: danger pays.
 
 ## Feel
 
-- **Pop:** collected coin scales up ~1.8× and fades with a 5-fleck sparkle,
-  pure function of `wallClockMs − collectedAtMs` (CrashEffect pattern).
+- **Pop:** collected coin scales up ~1.8× and fades (with its glint
+  highlight), pure function of `wallClockMs − collectedAtMs` (CrashEffect
+  pattern). No per-coin sparkle flecks — 40 slots × extra nodes is exactly
+  the per-instance multiplication the perf rules forbid.
 - **Ding:** short synthesized blip (~90 ms, E6 sine + soft 2nd harmonic,
   generator committed as `scripts/make-coin-ding.js`). Consecutive collects
   within 1 s raise playback rate `1.0 → 1.6` in `+0.06` steps — a trail
