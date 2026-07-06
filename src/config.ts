@@ -120,6 +120,39 @@ export const config = {
     decayStepSeconds: 1.0,
   },
 
+  coins: {
+    // Two sources: gentle trails in flyable space (soft path hint, worth 1)
+    // and risk clusters in graze bands (danger pays, worth 5).
+    /** Pooled coin slots — reused, never allocated during play. */
+    poolSize: 40,
+    /** Sprite radius (shu). */
+    radius: 0.016,
+    /** Pickup box = sprite box × this — generous ON PURPOSE, the inverse
+     * of the kill-hitbox rule: a miss that looked like a hit frustrates. */
+    pickupScale: 1.6,
+    /** Extra clearance between a trail coin's pickup box and any blocker. */
+    placementMargin: 0.01,
+    trail: {
+      firstDelaySeconds: 3,
+      /** Mean seconds between trails ± jitter fraction. */
+      intervalSeconds: 4.5,
+      intervalJitter: 0.3,
+      countMin: 5,
+      countMax: 8,
+      /** X spacing between consecutive coins (shu). */
+      spacing: 0.09,
+      /** Vertical amplitude range for sine/arc shapes (shu). */
+      ampMin: 0.06,
+      ampMax: 0.12,
+      value: 1,
+    },
+    riskCluster: {
+      /** Chance per rock/wall/pinch spawn to attach a trio. */
+      chance: 0.2,
+      value: 5,
+    },
+  },
+
   events: {
     // Windows (s) after which the engine zeroes an effect timestamp so the
     // render layer's derived values idle on their cheap early-return paths
@@ -129,6 +162,8 @@ export const config = {
     zoneTransitionSeconds: 2.5,
     /** Graze sparks + edge pulse window. */
     grazeEffectSeconds: 0.6,
+    /** Coin collect pop — the engine retires the slot after this. */
+    coinPopSeconds: 0.4,
   },
 
   zones: [
