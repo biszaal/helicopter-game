@@ -43,6 +43,7 @@ import { useSettings } from '../state/settings';
 import { Background } from './Background';
 import { GameButton } from './GameButton';
 import { CaveWalls } from './CaveWalls';
+import { Coin } from './Coins';
 import { CrashEffect, useScreenShake } from './CrashEffect';
 import { GrazePulse, GrazeSparks } from './GrazeSparks';
 import { Helicopter } from './Helicopter';
@@ -85,6 +86,8 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
     grazeSeed,
     rocks,
     pinches,
+    coins,
+    runCoins,
   } = loop;
 
   /** Stable bundle of the shared values the palette crossfade reads. */
@@ -263,6 +266,7 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
     () => `${Math.floor(renderScrollX.value * config.scoring.metersPerShu)} m`,
   );
   const zoneText = useDerivedValue(() => config.zones[zoneIndex.value].name);
+  const coinText = useDerivedValue(() => `● ${runCoins.value}`);
 
   return (
     <View style={styles.root}>
@@ -286,6 +290,15 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
                 screenHeight={height}
                 renderScrollX={renderScrollX}
                 color={wallInner}
+              />
+            ))}
+            {coins.map((slot, i) => (
+              <Coin
+                key={i}
+                slot={slot}
+                screenHeight={height}
+                renderScrollX={renderScrollX}
+                wallClockMs={wallClockMs}
               />
             ))}
             {rocks.map((slot, i) => (
@@ -376,6 +389,13 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
             text={zoneText}
             font={distanceFont}
             color={theme.colors.hud}
+          />
+          <SkiaText
+            x={hudX}
+            y={barY + 66}
+            text={coinText}
+            font={distanceFont}
+            color={theme.coins.gold}
           />
         </Canvas>
       </GestureDetector>
