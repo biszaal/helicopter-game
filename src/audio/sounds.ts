@@ -32,6 +32,15 @@ const ROTOR_VOLUME_SPAN = 0.35;
  * time observer and its JS events out of the frame budget. */
 const PLAYER_OPTIONS = { updateInterval: 60000 };
 
+/** Rewind then play, waiting for the seek to actually land first.
+ * seekTo() is async on both iOS and Android while play() is synchronous —
+ * firing them back-to-back let play() race ahead of the native rewind, so
+ * a one-shot sound retriggered at/near its end (the common case) sometimes
+ * played zero audible frames. */
+export function restartAndPlay(player: Pick<AudioPlayer, 'seekTo' | 'play'>): void {
+  player.seekTo(0).then(() => player.play());
+}
+
 /** Idempotent. Call once at app start, before any play call matters. */
 export async function initAudio(): Promise<void> {
   if (players !== null) return;
@@ -72,15 +81,13 @@ export function setSoundEnabled(on: boolean): void {
 
 export function playClick(): void {
   if (!soundOn || players === null) return;
-  players.click.seekTo(0);
-  players.click.play();
+  restartAndPlay(players.click);
 }
 
 export function startRotor(): void {
   if (!soundOn || players === null) return;
   setRotorIntensity(0); // fresh runs start at base pitch
-  players.rotor.seekTo(0);
-  players.rotor.play();
+  restartAndPlay(players.rotor);
 }
 
 /** Rotor urgency from the scroll-speed ramp progress (0–1) — volume only. */
@@ -93,15 +100,13 @@ export function setRotorIntensity(progress: number): void {
 /** Graze banked — a quick air-cut past the rock. */
 export function playWhoosh(): void {
   if (!soundOn || players === null) return;
-  players.whoosh.seekTo(0);
-  players.whoosh.play();
+  restartAndPlay(players.whoosh);
 }
 
 /** Zone milestone chime. */
 export function playZoneChime(): void {
   if (!soundOn || players === null) return;
-  players.zone.seekTo(0);
-  players.zone.play();
+  restartAndPlay(players.zone);
 }
 
 export function stopRotor(): void {
@@ -110,6 +115,5 @@ export function stopRotor(): void {
 
 export function playCrash(): void {
   if (!soundOn || players === null) return;
-  players.crash.seekTo(0);
-  players.crash.play();
+  restartAndPlay(players.crash);
 }
