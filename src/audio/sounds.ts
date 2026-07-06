@@ -18,6 +18,7 @@ let players: {
   crash: AudioPlayer;
   zone: AudioPlayer;
   whoosh: AudioPlayer;
+  ding: AudioPlayer;
 } | null = null;
 
 const ROTOR_BASE_VOLUME = 0.45;
@@ -65,13 +66,18 @@ export async function initAudio(): Promise<void> {
     require('../../assets/sounds/whoosh.wav'),
     PLAYER_OPTIONS,
   );
+  const ding = createAudioPlayer(
+    require('../../assets/sounds/ding.wav'),
+    PLAYER_OPTIONS,
+  );
   click.volume = 0.7;
   rotor.volume = ROTOR_BASE_VOLUME;
   rotor.loop = true;
   crash.volume = 0.9;
   zone.volume = 0.8;
   whoosh.volume = 0.5;
-  players = { click, rotor, crash, zone, whoosh };
+  ding.volume = 0.6;
+  players = { click, rotor, crash, zone, whoosh, ding };
 }
 
 export function setSoundEnabled(on: boolean): void {
@@ -107,6 +113,26 @@ export function playWhoosh(): void {
 export function playZoneChime(): void {
   if (!soundOn || players === null) return;
   restartAndPlay(players.zone);
+}
+
+const DING_STREAK_WINDOW_MS = 1000;
+const DING_RATE_STEP = 0.06;
+const DING_RATE_MAX = 1.6;
+let dingStreak = 0;
+let lastDingAtMs = 0;
+
+/** Coin collected. Consecutive pickups within a second climb in pitch —
+ * a trail reads as an arpeggio. Rate on a ONE-SHOT player is safe (the
+ * looper lesson applies to loops). */
+export function playCoinDing(): void {
+  if (!soundOn || players === null) return;
+  const now = Date.now();
+  dingStreak = now - lastDingAtMs <= DING_STREAK_WINDOW_MS ? dingStreak + 1 : 0;
+  lastDingAtMs = now;
+  players.ding.setPlaybackRate(
+    Math.min(DING_RATE_MAX, 1 + DING_RATE_STEP * dingStreak),
+  );
+  restartAndPlay(players.ding);
 }
 
 export function stopRotor(): void {

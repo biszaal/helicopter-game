@@ -23,6 +23,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { hapticCrash, hapticGraze, hapticZone } from '../audio/haptics';
 import {
+  playCoinDing,
   playCrash,
   playWhoosh,
   playZoneChime,
@@ -120,6 +121,7 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
   const [gameOver, setGameOver] = useState<{
     score: number;
     distance: number;
+    coins: number;
   } | null>(null);
   const [announce, setAnnounce] = useState<{
     name: string;
@@ -148,12 +150,12 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
     return stopRotor;
   }, []);
 
-  const handleDeath = (finalScore: number, distance: number) => {
-    setGameOver({ score: finalScore, distance });
+  const handleDeath = (finalScore: number, distance: number, coins: number) => {
+    setGameOver({ score: finalScore, distance, coins });
     stopRotor();
     playCrash();
     hapticCrash();
-    recordRun(finalScore, distance);
+    recordRun(finalScore, distance, coins);
   };
   const handleRetry = () => {
     setGameOver(null);
@@ -167,6 +169,7 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
         runOnJS(handleDeath)(
           Math.floor(score.value),
           Math.floor(scrollX.value * config.scoring.metersPerShu),
+          runCoins.value,
         );
       } else if (current === PHASE_PLAYING && previous === PHASE_DEAD) {
         runOnJS(handleRetry)();
@@ -181,6 +184,16 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
       if (previous !== null && current > previous) {
         runOnJS(hapticGraze)();
         runOnJS(playWhoosh)();
+      }
+    },
+  );
+
+  // A coin banked — ding (with rising pitch for quick streaks, JS-side).
+  useAnimatedReaction(
+    () => runCoins.value,
+    (current, previous) => {
+      if (previous !== null && current > previous) {
+        runOnJS(playCoinDing)();
       }
     },
   );
@@ -453,6 +466,7 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
             <Text style={styles.overlayTitle}>GAME OVER</Text>
             <Text style={styles.overlayScore}>{gameOver.score}</Text>
             <Text style={styles.overlayDistance}>{gameOver.distance} m</Text>
+            <Text style={styles.overlayCoins}>+{gameOver.coins} COINS</Text>
             <Text style={styles.overlayHint}>TAP TO RETRY</Text>
             <View style={styles.overlayMenuButton}>
               <GameButton
@@ -538,6 +552,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginTop: 4,
+  },
+  overlayCoins: {
+    color: '#ffd34d',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 2,
+    marginTop: 10,
   },
   overlayHint: {
     color: '#8a94a3',
