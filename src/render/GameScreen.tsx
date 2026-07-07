@@ -23,7 +23,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import { hapticCrash, hapticGraze, hapticZone } from '../audio/haptics';
 import {
-  playCoinDing,
   playCrash,
   playWhoosh,
   playZoneChime,
@@ -44,7 +43,6 @@ import { useSettings } from '../state/settings';
 import { Background } from './Background';
 import { GameButton } from './GameButton';
 import { CaveWalls } from './CaveWalls';
-import { Coin } from './Coins';
 import { CrashEffect, useScreenShake } from './CrashEffect';
 import { GrazePulse, GrazeSparks } from './GrazeSparks';
 import { Helicopter } from './Helicopter';
@@ -87,8 +85,6 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
     grazeSeed,
     rocks,
     pinches,
-    coins,
-    runCoins,
   } = loop;
 
   /** Stable bundle of the shared values the palette crossfade reads. */
@@ -121,7 +117,6 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
   const [gameOver, setGameOver] = useState<{
     score: number;
     distance: number;
-    coins: number;
   } | null>(null);
   const [announce, setAnnounce] = useState<{
     name: string;
@@ -150,12 +145,12 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
     return stopRotor;
   }, []);
 
-  const handleDeath = (finalScore: number, distance: number, coins: number) => {
-    setGameOver({ score: finalScore, distance, coins });
+  const handleDeath = (finalScore: number, distance: number) => {
+    setGameOver({ score: finalScore, distance });
     stopRotor();
     playCrash();
     hapticCrash();
-    recordRun(finalScore, distance, coins);
+    recordRun(finalScore, distance);
   };
   const handleRetry = () => {
     setGameOver(null);
@@ -169,7 +164,6 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
         runOnJS(handleDeath)(
           Math.floor(score.value),
           Math.floor(scrollX.value * config.scoring.metersPerShu),
-          runCoins.value,
         );
       } else if (current === PHASE_PLAYING && previous === PHASE_DEAD) {
         runOnJS(handleRetry)();
@@ -184,16 +178,6 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
       if (previous !== null && current > previous) {
         runOnJS(hapticGraze)();
         runOnJS(playWhoosh)();
-      }
-    },
-  );
-
-  // A coin banked — ding (with rising pitch for quick streaks, JS-side).
-  useAnimatedReaction(
-    () => runCoins.value,
-    (current, previous) => {
-      if (previous !== null && current > previous) {
-        runOnJS(playCoinDing)();
       }
     },
   );
@@ -279,7 +263,6 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
     () => `${Math.floor(renderScrollX.value * config.scoring.metersPerShu)} m`,
   );
   const zoneText = useDerivedValue(() => config.zones[zoneIndex.value].name);
-  const coinText = useDerivedValue(() => `● ${runCoins.value}`);
 
   return (
     <View style={styles.root}>
@@ -303,15 +286,6 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
                 screenHeight={height}
                 renderScrollX={renderScrollX}
                 color={wallInner}
-              />
-            ))}
-            {coins.map((slot, i) => (
-              <Coin
-                key={i}
-                slot={slot}
-                screenHeight={height}
-                renderScrollX={renderScrollX}
-                wallClockMs={wallClockMs}
               />
             ))}
             {rocks.map((slot, i) => (
@@ -403,13 +377,6 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
             font={distanceFont}
             color={theme.colors.hud}
           />
-          <SkiaText
-            x={hudX}
-            y={barY + 66}
-            text={coinText}
-            font={distanceFont}
-            color={theme.coins.gold}
-          />
         </Canvas>
       </GestureDetector>
       {announce !== null && (
@@ -466,7 +433,6 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
             <Text style={styles.overlayTitle}>GAME OVER</Text>
             <Text style={styles.overlayScore}>{gameOver.score}</Text>
             <Text style={styles.overlayDistance}>{gameOver.distance} m</Text>
-            <Text style={styles.overlayCoins}>+{gameOver.coins} COINS</Text>
             <Text style={styles.overlayHint}>TAP TO RETRY</Text>
             <View style={styles.overlayMenuButton}>
               <GameButton
@@ -552,13 +518,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginTop: 4,
-  },
-  overlayCoins: {
-    color: '#ffd34d',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 2,
-    marginTop: 10,
   },
   overlayHint: {
     color: '#8a94a3',

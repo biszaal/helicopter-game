@@ -23,7 +23,7 @@ interface MenuScreenProps {
  */
 export function MenuScreen({ onPlay, onSettings }: MenuScreenProps) {
   const { width, height } = useWindowDimensions();
-  const { bestScore, bestDistance, totalCoins } = useSettings();
+  const { bestScore, bestDistance } = useSettings();
 
   const clockMs = useSharedValue(0);
   useFrameCallback((frame) => {
@@ -65,9 +65,6 @@ export function MenuScreen({ onPlay, onSettings }: MenuScreenProps) {
             <Text style={styles.best}>
               BEST {bestScore} · {bestDistance} m
             </Text>
-          )}
-          {totalCoins > 0 && (
-            <Text style={styles.coins}>● {totalCoins} COINS</Text>
           )}
         </View>
         <View style={styles.buttons}>
@@ -113,13 +110,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 2,
     marginTop: 18,
-  },
-  coins: {
-    color: '#ffd34d',
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 2,
-    marginTop: 6,
   },
   buttons: {
     gap: 16,

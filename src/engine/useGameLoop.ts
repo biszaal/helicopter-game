@@ -8,24 +8,17 @@ import { stepPhysics } from './physics';
 import { rectsOverlap } from './collision';
 import { applyGrazes, stepDecay } from './scoring';
 import {
-  coinFits,
-  coinTrailPoints,
   doublePinchCentres,
-  gateClusterPoints,
-  pinchClusterPoints,
   pinchSpurs,
   placeRock,
   placeWallGap,
   rampAt,
-  rockClusterPoints,
   sizeScaleAt,
   spursFor,
   wallSegments,
   zoneIndexAt,
-  type CoinPoint,
   type OccupiedRect,
 } from './spawning';
-import { useCoinPool, type CoinSlot } from './useCoinPool';
 import { useRockPool, type RockSlot } from './useRockPool';
 import { usePinchPool, type PinchSlot } from './usePinchPool';
 
@@ -81,9 +74,6 @@ export interface GameLoop {
   /** Pooled world objects, for rendering. */
   rocks: RockSlot[];
   pinches: PinchSlot[];
-  coins: CoinSlot[];
-  /** This run's collected coin value. Monotonic within a run. */
-  runCoins: SharedValue<number>;
   /** Worklet: reset every run-scoped value and start a fresh run. */
   resetRun: () => void;
 }
@@ -136,109 +126,6 @@ export function useGameLoop(aspectRatio: number): GameLoop {
 
   const rocks = useRockPool();
   const pinches = usePinchPool();
-  const coins = useCoinPool();
-
-  const nextTrailAt = useSharedValue<number>(
-    config.coins.trail.firstDelaySeconds,
-  );
-  const runCoins = useSharedValue(0);
-
-  /** Everything currently blocking the tunnel — rocks at their FULL drift
-   * envelope, pinch spurs. Shared by rock/wall/coin placement. */
-  const collectOccupied = (): OccupiedRect[] => {
-    'worklet';
-    const occupied: OccupiedRect[] = [];
-    for (let i = 0; i < rocks.length; i++) {
-      const r = rocks[i];
-      if (r.active.value === 0) continue;
-      occupied.push({
-        x1: r.worldX.value - r.halfW.value,
-        x2: r.worldX.value + r.halfW.value,
-        y1: r.baseCenterY.value - r.halfH.value - r.driftAmp.value,
-        y2: r.baseCenterY.value + r.halfH.value + r.driftAmp.value,
-      });
-    }
-    for (let i = 0; i < pinches.length; i++) {
-      const p = pinches[i];
-      if (p.active.value === 0) continue;
-      const px1 = p.worldX.value;
-      const px2 = p.worldX.value + p.length.value;
-      occupied.push({ x1: px1, x2: px2, y1: 0, y2: p.topLen.value });
-      occupied.push({ x1: px1, x2: px2, y1: 1 - p.botLen.value, y2: 1 });
-    }
-    return occupied;
-  };
-
-  const claimCoin = (x: number, y: number, value: number) => {
-    'worklet';
-    for (let i = 0; i < coins.length; i++) {
-      const c = coins[i];
-      if (c.active.value === 0) {
-        c.worldX.value = x;
-        c.centerY.value = y;
-        c.value.value = value;
-        c.collectedAtMs.value = 0;
-        c.seed.value = Math.random();
-        c.active.value = 1;
-        return;
-      }
-    }
-  };
-
-  /** Risk trio: deliberate graze-band placement — no fitness check. */
-  const spawnRiskCluster = (pts: CoinPoint[]) => {
-    'worklet';
-    for (let i = 0; i < pts.length; i++) {
-      claimCoin(pts[i].x, pts[i].y, config.coins.riskCluster.value);
-    }
-  };
-
-  const spawnTrail = (scroll: number) => {
-    'worklet';
-    const t = config.coins.trail;
-    const count =
-      t.countMin + Math.floor(Math.random() * (t.countMax - t.countMin + 1));
-    const amp = t.ampMin + Math.random() * (t.ampMax - t.ampMin);
-    const kind = Math.floor(Math.random() * 3);
-    const r = config.coins.radius;
-    const minY = config.world.wallThickness + 2 * r;
-    const maxY = 1 - config.world.wallThickness - 2 * r;
-    const centerY = minY + amp + Math.random() * (maxY - minY - 2 * amp);
-    const pts = coinTrailPoints(count, t.spacing, centerY, amp, kind, minY, maxY);
-    const startX = scroll + aspectRatio + r;
-    const half = r * config.coins.pickupScale + config.coins.placementMargin;
-    const occupied = collectOccupied();
-    for (let i = 0; i < pts.length; i++) {
-      const x = startX + pts[i].x;
-      if (coinFits(x, pts[i].y, half, occupied)) {
-        claimCoin(x, pts[i].y, t.value);
-      }
-    }
-  };
-
-  /** A late obstacle landing on parked coins deletes them — a coin inside
-   * a rock is a lie (fairness rule, spec). */
-  const clearCoinsInRect = (
-    x1: number,
-    x2: number,
-    y1: number,
-    y2: number,
-  ) => {
-    'worklet';
-    const r = config.coins.radius;
-    for (let i = 0; i < coins.length; i++) {
-      const c = coins[i];
-      if (c.active.value === 0 || c.collectedAtMs.value !== 0) continue;
-      if (
-        c.worldX.value + r > x1 &&
-        c.worldX.value - r < x2 &&
-        c.centerY.value + r > y1 &&
-        c.centerY.value - r < y2
-      ) {
-        c.active.value = 0;
-      }
-    }
-  };
 
   const activatePinch = (
     worldX: number,
@@ -265,27 +152,17 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     'worklet';
     const dp = config.behaviors.doublePinch;
     const enterX = scroll + aspectRatio;
-    let firstSpurs: { topLen: number; botLen: number };
     if (zoneIndexAt(scroll) >= dp.unlockZone && Math.random() < dp.chance) {
       // An S-curve: two spans, corridors offset to opposite sides. The
       // stretch between them sits inside both rock-free margins.
       const c = doublePinchCentres(scroll, Math.random);
-      firstSpurs = spursFor(c.first, c.gap);
-      activatePinch(enterX, firstSpurs);
+      activatePinch(enterX, spursFor(c.first, c.gap));
       activatePinch(
         enterX + config.pinch.lengthShu + dp.gapBetween,
         spursFor(c.second, c.gap),
       );
     } else {
-      firstSpurs = pinchSpurs(scroll, Math.random);
-      activatePinch(enterX, firstSpurs);
-    }
-    if (Math.random() < config.coins.riskCluster.chance) {
-      const corridorCenter =
-        firstSpurs.topLen + (1 - firstSpurs.topLen - firstSpurs.botLen) / 2;
-      spawnRiskCluster(
-        pinchClusterPoints(enterX, config.pinch.lengthShu, corridorCenter),
-      );
+      activatePinch(enterX, pinchSpurs(scroll, Math.random));
     }
   };
 
@@ -319,7 +196,25 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     }
 
     // Everything currently blocking the tunnel, for the corridor guarantee.
-    const occupied = collectOccupied();
+    const occupied: OccupiedRect[] = [];
+    for (let i = 0; i < rocks.length; i++) {
+      const r = rocks[i];
+      if (r.active.value === 0) continue;
+      occupied.push({
+        x1: r.worldX.value - r.halfW.value,
+        x2: r.worldX.value + r.halfW.value,
+        y1: r.baseCenterY.value - r.halfH.value - r.driftAmp.value,
+        y2: r.baseCenterY.value + r.halfH.value + r.driftAmp.value,
+      });
+    }
+    for (let i = 0; i < pinches.length; i++) {
+      const p = pinches[i];
+      if (p.active.value === 0) continue;
+      const px1 = p.worldX.value;
+      const px2 = p.worldX.value + p.length.value;
+      occupied.push({ x1: px1, x2: px2, y1: 0, y2: p.topLen.value });
+      occupied.push({ x1: px1, x2: px2, y1: 1 - p.botLen.value, y2: 1 });
+    }
 
     const y = placeRock(
       centreX - halfW,
@@ -331,7 +226,6 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     );
     if (y === null) return; // never seal the tunnel — skip instead
 
-    let placed = false;
     for (let i = 0; i < rocks.length; i++) {
       const r = rocks[i];
       if (r.active.value === 0) {
@@ -351,29 +245,8 @@ export function useGameLoop(aspectRatio: number): GameLoop {
         r.armed.value = 0;
         r.seed.value = Math.random(); // cosmetic: shape variant
         r.active.value = 1;
-        placed = true;
-        break;
+        return;
       }
-    }
-    if (!placed) return;
-
-    clearCoinsInRect(
-      centreX - halfW,
-      centreX + halfW,
-      y - halfH - driftAmp,
-      y + halfH + driftAmp,
-    );
-    // Risk trio on static rocks only — a bobbing rock would drift away
-    // from coins parked beside its spawn pose.
-    if (!drifts && Math.random() < config.coins.riskCluster.chance) {
-      spawnRiskCluster(
-        rockClusterPoints(
-          centreX + halfW,
-          y,
-          halfH,
-          config.graze.grazeDistance / 2,
-        ),
-      );
     }
   };
 
@@ -394,7 +267,17 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     }
 
     // Blockers near the wall's span (drift envelopes included).
-    const occupied = collectOccupied();
+    const occupied: OccupiedRect[] = [];
+    for (let i = 0; i < rocks.length; i++) {
+      const r = rocks[i];
+      if (r.active.value === 0) continue;
+      occupied.push({
+        x1: r.worldX.value - r.halfW.value,
+        x2: r.worldX.value + r.halfW.value,
+        y1: r.baseCenterY.value - r.halfH.value - r.driftAmp.value,
+        y2: r.baseCenterY.value + r.halfH.value + r.driftAmp.value,
+      });
+    }
 
     const gapHalf =
       (rampAt(scroll, config.difficulty.clearance) * wallCfg.gapScale) / 2;
@@ -434,11 +317,6 @@ export function useGameLoop(aspectRatio: number): GameLoop {
       r.seed.value = Math.random(); // cosmetic: shape variant
       r.active.value = 1;
     }
-
-    clearCoinsInRect(centreX - halfW, centreX + halfW, 0, 1);
-    if (Math.random() < config.coins.riskCluster.chance) {
-      spawnRiskCluster(gateClusterPoints(centreX, gapCenter, gapHalf));
-    }
   };
 
   const resetRun = () => {
@@ -465,11 +343,6 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     for (let i = 0; i < pinches.length; i++) {
       pinches[i].active.value = 0;
     }
-    for (let i = 0; i < coins.length; i++) {
-      coins[i].active.value = 0;
-    }
-    runCoins.value = 0;
-    nextTrailAt.value = config.coins.trail.firstDelaySeconds;
     score.value = 0;
     tierIndex.value = 0;
     decayTimer.value = 0;
@@ -495,7 +368,6 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     let prevScroll = prevScrollX.value;
     let now = elapsed.value;
     let runScore = score.value;
-    let coinsRun = runCoins.value;
     let tier = tierIndex.value;
     let dTimer = decayTimer.value;
     let dThreshold = decayThreshold.value;
@@ -546,13 +418,6 @@ export function useGameLoop(aspectRatio: number): GameLoop {
           now +
           interval * (1 + (Math.random() * 2 - 1) * config.pinch.intervalJitter);
         spawnPinch(scroll);
-      }
-      if (now >= nextTrailAt.value) {
-        const t = config.coins.trail;
-        nextTrailAt.value =
-          now +
-          t.intervalSeconds * (1 + (Math.random() * 2 - 1) * t.intervalJitter);
-        spawnTrail(scroll);
       }
 
       const hbTop = pos - hbHeight / 2;
@@ -670,35 +535,6 @@ export function useGameLoop(aspectRatio: number): GameLoop {
         }
       }
 
-      // Coins: generous pickup, pop window, release off-screen.
-      const coinHalf = config.coins.radius * config.coins.pickupScale;
-      for (let i = 0; i < coins.length; i++) {
-        const c = coins[i];
-        if (c.active.value === 0) continue;
-        const screenX = c.worldX.value - scroll;
-        if (c.collectedAtMs.value === 0) {
-          if (
-            !died &&
-            rectsOverlap(
-              hbLeft, hbTop, hbWidth, hbHeight,
-              screenX - coinHalf, c.centerY.value - coinHalf,
-              2 * coinHalf, 2 * coinHalf,
-            )
-          ) {
-            c.collectedAtMs.value = frame.timestamp;
-            coinsRun += c.value.value;
-          }
-        } else if (
-          frame.timestamp - c.collectedAtMs.value >
-          config.events.coinPopSeconds * MS_PER_SECOND
-        ) {
-          c.active.value = 0; // pop finished — back to the pool
-        }
-        if (screenX + coinHalf < 0) {
-          c.active.value = 0;
-        }
-      }
-
       // Bank instantly at the current multiplier — the total only ever grows.
       // Points per METRE stay constant; points per second rise with the pace.
       runScore +=
@@ -753,7 +589,6 @@ export function useGameLoop(aspectRatio: number): GameLoop {
       grazeAtMs.value = 0;
     }
     score.value = runScore;
-    runCoins.value = coinsRun;
     tierIndex.value = tier;
     decayTimer.value = dTimer;
     decayThreshold.value = dThreshold;
@@ -791,8 +626,6 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     grazeSeed,
     rocks,
     pinches,
-    coins,
-    runCoins,
     resetRun,
   };
 }

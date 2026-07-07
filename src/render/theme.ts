@@ -122,16 +122,6 @@ export const theme = {
     blinkOnFraction: 0.18,
   },
 
-  /** Coins: gold body, warmer + bigger for risk coins, collect pop. */
-  coins: {
-    gold: '#ffd34d',
-    highlight: '#fff3c4',
-    /** Risk (value > 1) coins draw this much bigger. */
-    riskSizeScale: 1.3,
-    /** Pop: body scales to this and fades over the events window. */
-    popScale: 1.8,
-  },
-
   /** Graze feedback: spark burst streaking back off the helicopter. */
   sparks: {
     count: 7,
