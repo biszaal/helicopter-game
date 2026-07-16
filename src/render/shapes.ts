@@ -1,21 +1,21 @@
 import { Skia, type SkPath } from '@shopify/react-native-skia';
+import {
+  cityLayout,
+  crystalLayout,
+  mountainLayout,
+  mulberry32,
+  type Pt,
+} from './sceneryGeometry';
 
 /**
  * Procedural path factories for every visual in the game. All functions are
  * pure and deterministic (seeded PRNG) and are called once at mount — no
- * paths are ever built while the game runs.
+ * paths are ever built while the game runs. Scenery layouts live in
+ * sceneryGeometry.ts (Skia-free, unit-tested); this file only converts
+ * them to SkPaths.
  */
 
-/** Deterministic PRNG so silhouettes are identical on every mount/device. */
-export function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+export { mulberry32 };
 
 export const ROCK_VARIANTS = 6;
 
@@ -96,6 +96,75 @@ export function makeRidgePath(
   p.lineTo(tileWidth, 0);
   p.close();
   return p;
+}
+
+/** Closed polygon from a point list. */
+function polygonPath(points: Pt[], into?: SkPath): SkPath {
+  const p = into ?? Skia.Path.Make();
+  points.forEach((pt, i) => (i === 0 ? p.moveTo(pt.x, pt.y) : p.lineTo(pt.x, pt.y)));
+  p.close();
+  return p;
+}
+
+/**
+ * One repeating tile of a mountain-range silhouette hanging from y = 0
+ * (same contract as makeRidgePath — mirror with scaleY(-1) for the floor).
+ * `caps` holds the lighter snow-cap triangles, drawn over the silhouette.
+ */
+export function makeMountainPaths(
+  tileWidth: number,
+  maxHeight: number,
+  seed: number,
+): { silhouette: SkPath; caps: SkPath } {
+  const layout = mountainLayout(tileWidth, maxHeight, seed);
+  const silhouette = Skia.Path.Make();
+  silhouette.moveTo(0, 0);
+  for (const pt of layout.profile) silhouette.lineTo(pt.x, pt.y);
+  silhouette.lineTo(tileWidth, 0);
+  silhouette.close();
+  const caps = Skia.Path.Make();
+  for (const cap of layout.caps) polygonPath(cap, caps);
+  return { silhouette, caps };
+}
+
+/**
+ * One repeating tile of a dark city block hanging from y = 0. Lit windows
+ * are batched into one path per flicker group so the whole skyline costs a
+ * handful of Skia nodes regardless of window count.
+ */
+export function makeCityscapePaths(
+  tileWidth: number,
+  maxHeight: number,
+  seed: number,
+): { silhouette: SkPath; windowGroups: SkPath[] } {
+  const layout = cityLayout(tileWidth, maxHeight, seed);
+  const silhouette = Skia.Path.Make();
+  for (const b of layout.buildings) {
+    silhouette.addRect(Skia.XYWHRect(b.x, b.y, b.w, b.h));
+  }
+  const windowGroups = layout.windowGroups.map((group) => {
+    const p = Skia.Path.Make();
+    for (const w of group) p.addRect(Skia.XYWHRect(w.x, w.y, w.w, w.h));
+    return p;
+  });
+  return { silhouette, windowGroups };
+}
+
+/**
+ * One repeating tile of crystal shard clusters growing off y = 0, with a
+ * brighter glint path over the tallest tips.
+ */
+export function makeCrystalPaths(
+  tileWidth: number,
+  maxHeight: number,
+  seed: number,
+): { shards: SkPath; glints: SkPath } {
+  const layout = crystalLayout(tileWidth, maxHeight, seed);
+  const shards = Skia.Path.Make();
+  for (const shard of layout.shards) polygonPath(shard, shards);
+  const glints = Skia.Path.Make();
+  for (const glint of layout.glints) polygonPath(glint, glints);
+  return { shards, glints };
 }
 
 export interface HelicopterPaths {
