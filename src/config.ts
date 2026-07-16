@@ -25,12 +25,14 @@ export const config = {
      * exactly (in screen-height fractions); >1 twitchier, <1 more damped. */
     steerSensitivity: 1.0,
     /** Spring pull toward the target (1/s²). Higher = snappier chase. */
-    springStiffness: 90,
-    /** Velocity damping (1/s). Critical damping is 2·√stiffness (≈19 here);
-     * below that the helicopter overshoots slightly — the floaty feel. */
-    springDamping: 14,
+    springStiffness: 115,
+    /** Velocity damping (1/s). Critical damping is 2·√stiffness (≈21.5 here);
+     * below that the helicopter overshoots slightly — the floaty feel. Kept at
+     * the same ~0.75 ratio to stiffness so the response is quicker to react
+     * (easier rock dodges) without turning twitchy. */
+    springDamping: 16,
     /** Hard cap on vertical speed (shu/s). */
-    maxSpeed: 1.3,
+    maxSpeed: 1.5,
   },
 
   helicopter: {
@@ -51,6 +53,13 @@ export const config = {
     backgroundTileRatio: 0.22,
     /** Thickness of the top/bottom cave walls (shu). Collidable — walls kill. */
     wallThickness: 0.045,
+    /** Max playfield width as an aspect ratio (width ÷ height). On a wide
+     * screen (iPad, Mac, desktop web) the world is capped to this and centred,
+     * with the extra space letterboxed — so reaction distance (rocks enter at
+     * the play edge, heli sits at fixedXRatio) is identical everywhere and
+     * wide screens aren't unfairly easy. ~0.56 leaves every phone full-bleed
+     * (portrait aspects are ≤ ~0.56) and only letterboxes tablets/desktop. */
+    maxPlayAspect: 0.56,
   },
 
   obstacles: {

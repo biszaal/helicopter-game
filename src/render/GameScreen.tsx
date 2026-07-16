@@ -62,8 +62,13 @@ interface GameScreenProps {
 
 export function GameScreen({ onExitToMenu }: GameScreenProps) {
   const { width, height } = useWindowDimensions();
+  // Letterbox: on a wide screen (iPad / Mac / desktop web) cap the playfield
+  // width and centre it, so reaction distance is identical everywhere and wide
+  // screens aren't unfairly easy. Phones stay full-bleed (width ≤ the cap).
+  const playWidth = Math.min(width, height * config.world.maxPlayAspect);
+  const playOffsetX = (width - playWidth) / 2;
   const { recordRun } = useSettings();
-  const loop = useGameLoop(width / height);
+  const loop = useGameLoop(playWidth / height);
   const gesture = useSteerGesture(loop, height);
   const {
     renderY,
@@ -232,7 +237,7 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
     return { opacity };
   });
 
-  const heliCenterX = width * config.helicopter.fixedXRatio;
+  const heliCenterX = playWidth * config.helicopter.fixedXRatio;
 
   /** Seconds since death — negative while flying. Drives crash + shake. */
   const crashT = useDerivedValue(() =>
@@ -242,10 +247,11 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
   );
   const shakeTransform = useScreenShake(crashT);
 
-  // HUD layout (cosmetic) — a left-aligned column under the top wall.
-  const hudX = width * 0.06;
+  // HUD layout (cosmetic) — a left-aligned column under the top wall. Sized
+  // against the playfield so it stays glued to the play area when letterboxed.
+  const hudX = playWidth * 0.06;
   const hudTop = height * 0.09;
-  const barMaxWidth = width * 0.24;
+  const barMaxWidth = playWidth * 0.24;
   const barY = hudTop + 44;
   const barHeight = 5;
 
@@ -268,9 +274,10 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
     <View style={styles.root}>
       <GestureDetector gesture={gesture}>
         <Canvas style={styles.canvas}>
+         <Group transform={[{ translateX: playOffsetX }]}>
           <Group transform={shakeTransform}>
             <Background
-              width={width}
+              width={playWidth}
               height={height}
               renderScrollX={renderScrollX}
               wallClockMs={wallClockMs}
@@ -298,7 +305,7 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
               />
             ))}
             <CaveWalls
-              width={width}
+              width={playWidth}
               height={height}
               renderScrollX={renderScrollX}
               topGradient={wallTopGradient}
@@ -329,7 +336,7 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
             />
           </Group>
           <GrazePulse
-            width={width}
+            width={playWidth}
             height={height}
             tierIndex={tierIndex}
             grazeAtMs={grazeAtMs}
@@ -377,6 +384,7 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
             font={distanceFont}
             color={theme.colors.hud}
           />
+         </Group>
         </Canvas>
       </GestureDetector>
       {announce !== null && (
@@ -392,7 +400,7 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
         <View
           style={[
             styles.pauseButton,
-            { top: height * 0.055, right: width * 0.05 },
+            { top: height * 0.055, right: playOffsetX + playWidth * 0.05 },
           ]}
         >
           <GameButton
