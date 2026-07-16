@@ -85,6 +85,47 @@ export const theme = {
   /** Zone announcement overlay: fade in / hold / fade out (s). */
   zoneAnnounce: { fadeInSeconds: 0.35, holdSeconds: 1.6, fadeOutSeconds: 0.55 },
 
+  /** Per-zone scenery silhouettes (indexes match config.zones), drawn
+   * between the far and near parallax ridges and crossfaded at zone
+   * boundaries together with the palette. Sizes in shu (× screenHeight),
+   * speed is a scroll factor like background.layers. `anchor` picks which
+   * cave edge the silhouette grows from. */
+  scenery: [
+    { kind: 'none' }, // SHALLOWS keeps the plain ridge look.
+    {
+      kind: 'mountains',
+      anchor: 'bottom',
+      speed: 0.45,
+      maxHeight: 0.3,
+      tileWidth: 1.5,
+      color: '#0c1d1f',
+      capColor: '#1e3c42',
+    },
+    {
+      kind: 'city',
+      anchor: 'bottom',
+      speed: 0.45,
+      maxHeight: 0.26,
+      tileWidth: 1.4,
+      color: '#120d06',
+      windows: {
+        color: '#ffd484',
+        /** One period per flicker group — co-prime-ish so the skyline never
+         * pulses in sync. */
+        flickerPeriodsMs: [3400, 5200, 7900],
+      },
+    },
+    {
+      kind: 'crystals',
+      anchor: 'both',
+      speed: 0.45,
+      maxHeight: 0.22,
+      tileWidth: 1.2,
+      color: '#230d13',
+      glintColor: '#5d2430',
+    },
+  ],
+
   background: {
     /** Parallax layers: scroll factor relative to the world, silhouette
      * height and tile width (all heights in shu, i.e. × screenHeight px).

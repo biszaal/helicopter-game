@@ -284,6 +284,7 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
               bgColors={bgColors}
               ridgeFar={ridgeFar}
               ridgeNear={ridgeNear}
+              zoneBlend={zoneBlend}
             />
             {pinches.map((slot, i) => (
               <Pinch

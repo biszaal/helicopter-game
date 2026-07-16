@@ -36,3 +36,25 @@ export function useZoneColor(
     return interpolateColor(Math.max(0, p), [0, 1], [from, to]);
   });
 }
+
+/**
+ * Crossfaded visibility of one zone's scenery layer — same clock and window
+ * as useZoneColor: the active zone's layer fades in over the transition,
+ * the previous zone's fades out, everything else sits at 0. Without a blend
+ * (menu screens) only zone 0 is visible.
+ */
+export function useZoneLayerOpacity(
+  blend: ZoneBlend | undefined,
+  zoneIdx: number,
+): DerivedValue<number> {
+  return useDerivedValue(() => {
+    if (blend === undefined) return zoneIdx === 0 ? 1 : 0;
+    const active = blend.zoneIndex.value;
+    if (blend.zoneChangedAtMs.value === 0) return zoneIdx === active ? 1 : 0;
+    const t = (blend.wallClockMs.value - blend.zoneChangedAtMs.value) / 1000;
+    const p = Math.min(1, Math.max(0, t / theme.zoneTransitionSeconds));
+    if (zoneIdx === active) return p;
+    if (zoneIdx === blend.prevZoneIndex.value) return 1 - p;
+    return 0;
+  });
+}

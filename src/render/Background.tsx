@@ -9,8 +9,10 @@ import {
 } from '@shopify/react-native-skia';
 import { useMemo } from 'react';
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
+import { Scenery } from './Scenery';
 import { makeRidgePath } from './shapes';
 import { theme } from './theme';
+import type { ZoneBlend } from './zonePalette';
 
 interface BackgroundProps {
   width: number;
@@ -22,6 +24,9 @@ interface BackgroundProps {
   bgColors?: SharedValue<string[]>;
   ridgeFar?: SharedValue<string>;
   ridgeNear?: SharedValue<string>;
+  /** Drives the per-zone scenery crossfade. Omitted on menu screens —
+   * zone 0 has no scenery, so the layer stays parked. */
+  zoneBlend?: ZoneBlend;
 }
 
 interface RidgeCopyProps {
@@ -99,7 +104,8 @@ function Mote({
   return <Circle cx={cx} cy={cy} r={mote.r} color={theme.colors.dust} />;
 }
 
-/** Deep-cave backdrop: gradient, two parallax ridge layers, drifting dust. */
+/** Deep-cave backdrop: gradient, two parallax ridge layers with the zone
+ * scenery sandwiched between them (mid-depth), and drifting dust. */
 export function Background({
   width,
   height,
@@ -108,6 +114,7 @@ export function Background({
   bgColors,
   ridgeFar,
   ridgeNear,
+  zoneBlend,
 }: BackgroundProps) {
   const z0 = theme.zones[0];
   const layers = useMemo(
@@ -125,6 +132,40 @@ export function Background({
       }),
     [width, height],
   );
+
+  // Ridge layers 0 (far) and 1 (near) render separately so the zone scenery
+  // can sit between them and read as mid-depth.
+  const ridgeLayer = (li: number) => {
+    const layer = layers[li];
+    const color =
+      li === 0 ? (ridgeFar ?? z0.ridgeFar) : (ridgeNear ?? z0.ridgeNear);
+    return Array.from({ length: layer.copies }, (_, i) => (
+      <Group key={`${li}-${i}`}>
+        <RidgeCopy
+          path={layer.topPath}
+          index={i}
+          tileWidth={layer.tileWidth}
+          speed={layer.speed}
+          color={color}
+          height={height}
+          mirrored={false}
+          renderScrollX={renderScrollX}
+          screenHeight={height}
+        />
+        <RidgeCopy
+          path={layer.bottomPath}
+          index={i}
+          tileWidth={layer.tileWidth}
+          speed={layer.speed}
+          color={color}
+          height={height}
+          mirrored
+          renderScrollX={renderScrollX}
+          screenHeight={height}
+        />
+      </Group>
+    ));
+  };
 
   const motes = useMemo<DustMote[]>(
     () =>
@@ -147,38 +188,15 @@ export function Background({
           colors={bgColors ?? [z0.backgroundTop, z0.backgroundBottom]}
         />
       </Rect>
-      {layers.map((layer, li) =>
-        Array.from({ length: layer.copies }, (_, i) => (
-          <Group key={`${li}-${i}`}>
-            <RidgeCopy
-              path={layer.topPath}
-              index={i}
-              tileWidth={layer.tileWidth}
-              speed={layer.speed}
-              color={
-                li === 0 ? (ridgeFar ?? z0.ridgeFar) : (ridgeNear ?? z0.ridgeNear)
-              }
-              height={height}
-              mirrored={false}
-              renderScrollX={renderScrollX}
-              screenHeight={height}
-            />
-            <RidgeCopy
-              path={layer.bottomPath}
-              index={i}
-              tileWidth={layer.tileWidth}
-              speed={layer.speed}
-              color={
-                li === 0 ? (ridgeFar ?? z0.ridgeFar) : (ridgeNear ?? z0.ridgeNear)
-              }
-              height={height}
-              mirrored
-              renderScrollX={renderScrollX}
-              screenHeight={height}
-            />
-          </Group>
-        )),
-      )}
+      {ridgeLayer(0)}
+      <Scenery
+        width={width}
+        height={height}
+        renderScrollX={renderScrollX}
+        wallClockMs={wallClockMs}
+        zoneBlend={zoneBlend}
+      />
+      {ridgeLayer(1)}
       {motes.map((mote, i) => (
         <Mote
           key={i}

@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { config } from '../../config';
+import { theme } from '../theme';
 import {
   CITY_FLICKER_GROUPS,
   cityLayout,
@@ -24,6 +26,13 @@ function expectRectInBounds(r: RectT) {
   expect(r.y).toBeGreaterThanOrEqual(0);
   expect(r.y + r.h).toBeLessThanOrEqual(MAX_H);
 }
+
+describe('zone tables', () => {
+  it('scenery, palette, and zone tables stay index-aligned', () => {
+    expect(theme.scenery).toHaveLength(config.zones.length);
+    expect(theme.zones).toHaveLength(config.zones.length);
+  });
+});
 
 describe('mountainLayout', () => {
   it('is deterministic for a seed and varies across seeds', () => {
