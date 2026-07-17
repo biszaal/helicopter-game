@@ -15,13 +15,14 @@ import { getSkin, theme } from './theme';
 interface MenuScreenProps {
   onPlay: () => void;
   onSettings: () => void;
+  onShop: () => void;
 }
 
 /**
  * Main menu: the live cave backdrop with a gently hovering helicopter,
  * driven by a local clock — the real game loop is not running here.
  */
-export function MenuScreen({ onPlay, onSettings }: MenuScreenProps) {
+export function MenuScreen({ onPlay, onSettings, onShop }: MenuScreenProps) {
   const { width, height } = useWindowDimensions();
   const { bestScore, bestDistance, totalCoins, selectedSkin } = useSettings();
 
@@ -73,6 +74,7 @@ export function MenuScreen({ onPlay, onSettings }: MenuScreenProps) {
         </View>
         <View style={styles.buttons}>
           <GameButton label="PLAY" onPress={onPlay} />
+          <GameButton label="SHOP" variant="secondary" onPress={onShop} />
           <GameButton label="SETTINGS" variant="secondary" onPress={onSettings} />
         </View>
       </View>
