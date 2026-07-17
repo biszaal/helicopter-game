@@ -10,7 +10,7 @@ import { useSettings } from '../state/settings';
 import { Background } from './Background';
 import { GameButton } from './GameButton';
 import { Helicopter } from './Helicopter';
-import { theme } from './theme';
+import { getSkin, theme } from './theme';
 
 interface MenuScreenProps {
   onPlay: () => void;
@@ -23,7 +23,7 @@ interface MenuScreenProps {
  */
 export function MenuScreen({ onPlay, onSettings }: MenuScreenProps) {
   const { width, height } = useWindowDimensions();
-  const { bestScore, bestDistance, totalCoins } = useSettings();
+  const { bestScore, bestDistance, totalCoins, selectedSkin } = useSettings();
 
   const clockMs = useSharedValue(0);
   useFrameCallback((frame) => {
@@ -55,6 +55,7 @@ export function MenuScreen({ onPlay, onSettings }: MenuScreenProps) {
           velY={velY}
           phase={phase}
           wallClockMs={clockMs}
+          skin={getSkin(selectedSkin)}
         />
       </Canvas>
       <View style={styles.content} pointerEvents="box-none">

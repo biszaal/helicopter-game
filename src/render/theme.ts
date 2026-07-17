@@ -37,6 +37,60 @@ export const theme = {
     coinGold: '#ffd34d',
   },
 
+  /** Helicopter skins — purchasable recolors (prices live in config.shop).
+   * 'classic' mirrors the base heli colors above. Shapes are shared; a
+   * future `paths` field here is the extension point for shape variants. */
+  heliSkins: {
+    classic: {
+      heliBodyTop: '#a6b0bd',
+      heliBodyBottom: '#525b68',
+      heliRotor: '#c7cdd6',
+      canopyGlow: '#ffd484',
+      searchlight: 'rgba(255, 221, 150, 0.16)',
+      navLight: '#ffb648',
+    },
+    midnight: {
+      heliBodyTop: '#3d4a63',
+      heliBodyBottom: '#1c2536',
+      heliRotor: '#8fa3c4',
+      canopyGlow: '#9fd8ff',
+      searchlight: 'rgba(159, 216, 255, 0.14)',
+      navLight: '#66d9ff',
+    },
+    ember: {
+      heliBodyTop: '#b5573b',
+      heliBodyBottom: '#5c2417',
+      heliRotor: '#d9a08a',
+      canopyGlow: '#ffd484',
+      searchlight: 'rgba(255, 200, 140, 0.16)',
+      navLight: '#ff7a3d',
+    },
+    jungle: {
+      heliBodyTop: '#7d8f5a',
+      heliBodyBottom: '#3a462a',
+      heliRotor: '#aebd90',
+      canopyGlow: '#d6ff8a',
+      searchlight: 'rgba(214, 255, 138, 0.13)',
+      navLight: '#a8e05f',
+    },
+    arctic: {
+      heliBodyTop: '#e8eef5',
+      heliBodyBottom: '#8f9dad',
+      heliRotor: '#ffffff',
+      canopyGlow: '#8ad6ff',
+      searchlight: 'rgba(200, 235, 255, 0.18)',
+      navLight: '#7fdcff',
+    },
+    gold: {
+      heliBodyTop: '#f0c454',
+      heliBodyBottom: '#8a6420',
+      heliRotor: '#ffe9a8',
+      canopyGlow: '#fff2c9',
+      searchlight: 'rgba(255, 230, 160, 0.2)',
+      navLight: '#ffd34d',
+    },
+  },
+
   /** Per-zone cave palettes (indexes match config.zones). zones[0] mirrors
    * the base colors above; later zones shift the mood:
    * deep blue → cold teal → ember amber → red glow. */
@@ -210,3 +264,11 @@ export const theme = {
     overlayFadeMs: 450,
   },
 } as const;
+
+export type SkinId = keyof typeof theme.heliSkins;
+export type SkinColors = (typeof theme.heliSkins)[SkinId];
+
+/** Safe skin lookup — unknown ids fall back to the classic skin. */
+export function getSkin(id: string): SkinColors {
+  return theme.heliSkins[id as SkinId] ?? theme.heliSkins.classic;
+}

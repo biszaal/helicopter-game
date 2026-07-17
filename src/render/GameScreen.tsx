@@ -48,7 +48,7 @@ import { GrazePulse, GrazeSparks } from './GrazeSparks';
 import { Helicopter } from './Helicopter';
 import { Pinch } from './Pinches';
 import { Rock } from './Rocks';
-import { theme } from './theme';
+import { getSkin, theme } from './theme';
 import { useZoneColor } from './zonePalette';
 
 const fontFamily = Platform.select({ ios: 'Helvetica', default: 'sans-serif' });
@@ -67,7 +67,8 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
   // screens aren't unfairly easy. Phones stay full-bleed (width ≤ the cap).
   const playWidth = Math.min(width, height * config.world.maxPlayAspect);
   const playOffsetX = (width - playWidth) / 2;
-  const { recordRun } = useSettings();
+  const { recordRun, selectedSkin } = useSettings();
+  const skin = getSkin(selectedSkin);
   const loop = useGameLoop(playWidth / height);
   const gesture = useSteerGesture(loop, height);
   const {
@@ -322,6 +323,7 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
               velY={velY}
               phase={phase}
               wallClockMs={wallClockMs}
+              skin={skin}
             />
             <GrazeSparks
               centerX={heliCenterX}

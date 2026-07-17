@@ -119,6 +119,21 @@ export const config = {
     pointsPerCoin: 1000,
   },
 
+  shop: {
+    // Skin ids must exist in theme.heliSkins (guarded by a test). Prices
+    // are tuned against the earn rate above: a decent run pays ~5-10
+    // coins, a deep one ~20-30 — first skin in a handful of runs, GOLD
+    // aspirational.
+    skins: [
+      { id: 'classic', name: 'CLASSIC', price: 0 },
+      { id: 'midnight', name: 'MIDNIGHT', price: 40 },
+      { id: 'ember', name: 'EMBER', price: 80 },
+      { id: 'jungle', name: 'JUNGLE', price: 150 },
+      { id: 'arctic', name: 'ARCTIC', price: 250 },
+      { id: 'gold', name: 'GOLD', price: 500 },
+    ],
+  },
+
   ui: {
     /** Seconds after death before a tap is accepted as retry (anti-mash). */
     retryLockoutSeconds: 0.35,

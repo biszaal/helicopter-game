@@ -9,6 +9,12 @@ import {
 } from 'react';
 import { setHapticsEnabled as syncHaptics } from '../audio/haptics';
 import { setSoundEnabled as syncSound } from '../audio/sounds';
+import {
+  applyPurchase,
+  applySelect,
+  FREE_SKIN_ID,
+  sanitizeWallet,
+} from './shop';
 
 const STORAGE_KEY = 'cave-heli:settings-v1';
 
@@ -20,6 +26,10 @@ interface Settings {
   bestDistance: number;
   /** Lifetime coin wallet — earned from run scores, spent in the shop. */
   totalCoins: number;
+  /** Skin ids the player owns; always contains the free skin. */
+  ownedSkins: string[];
+  /** The equipped skin — always one of ownedSkins. */
+  selectedSkin: string;
 }
 
 const DEFAULTS: Settings = {
@@ -28,6 +38,8 @@ const DEFAULTS: Settings = {
   bestScore: 0,
   bestDistance: 0,
   totalCoins: 0,
+  ownedSkins: [FREE_SKIN_ID],
+  selectedSkin: FREE_SKIN_ID,
 };
 
 interface SettingsContextValue extends Settings {
@@ -37,6 +49,10 @@ interface SettingsContextValue extends Settings {
    * one beat it. */
   recordRun: (score: number, distance: number, coins: number) => void;
   resetBest: () => void;
+  /** Buy + equip a skin; no-op if unknown, owned, or unaffordable. */
+  purchaseSkin: (id: string) => void;
+  /** Equip an owned skin; no-op otherwise. */
+  selectSkin: (id: string) => void;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -48,7 +64,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((raw) => {
         if (raw !== null) {
-          setSettings({ ...DEFAULTS, ...(JSON.parse(raw) as Partial<Settings>) });
+          setSettings(
+            sanitizeWallet({
+              ...DEFAULTS,
+              ...(JSON.parse(raw) as Partial<Settings>),
+            }),
+          );
         }
       })
       .catch(() => {}); // unreadable storage: keep defaults
@@ -97,8 +118,28 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     [],
   );
   const resetBest = useCallback(
+    // Best run only — the wallet and owned skins survive a reset.
     () => patch({ bestScore: 0, bestDistance: 0 }),
     [patch],
+  );
+  const applyWallet = useCallback(
+    (transition: (prev: Settings) => Settings | null) => {
+      setSettings((prev) => {
+        const next = transition(prev);
+        if (next === null) return prev;
+        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+        return next;
+      });
+    },
+    [],
+  );
+  const purchaseSkin = useCallback(
+    (id: string) => applyWallet((prev) => applyPurchase(prev, id)),
+    [applyWallet],
+  );
+  const selectSkin = useCallback(
+    (id: string) => applyWallet((prev) => applySelect(prev, id)),
+    [applyWallet],
   );
 
   return (
@@ -109,6 +150,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         setHapticsEnabled,
         recordRun,
         resetBest,
+        purchaseSkin,
+        selectSkin,
       }}
     >
       {children}

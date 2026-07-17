@@ -11,7 +11,7 @@ import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
 import { config } from '../config';
 import { PHASE_DEAD } from '../engine/useGameLoop';
 import { makeHelicopterPaths } from './shapes';
-import { theme } from './theme';
+import { theme, type SkinColors } from './theme';
 
 interface HelicopterProps {
   /** Fixed x of the helicopter centre (px). */
@@ -21,6 +21,8 @@ interface HelicopterProps {
   velY: SharedValue<number>;
   phase: SharedValue<number>;
   wallClockMs: SharedValue<number>;
+  /** Equipped skin palette; defaults to the classic look. */
+  skin?: SkinColors;
 }
 
 /**
@@ -36,6 +38,7 @@ export function Helicopter({
   velY,
   phase,
   wallClockMs,
+  skin = theme.heliSkins.classic,
 }: HelicopterProps) {
   const w = screenHeight * config.helicopter.spriteSize.width;
   const h = screenHeight * config.helicopter.spriteSize.height;
@@ -78,7 +81,7 @@ export function Helicopter({
         <LinearGradient
           start={vec(0.42 * w, 0)}
           end={vec(2.9 * w, 0)}
-          colors={[theme.colors.searchlight, 'transparent']}
+          colors={[skin.searchlight, 'transparent']}
         />
       </Path>
       <Path
@@ -86,17 +89,17 @@ export function Helicopter({
         style="stroke"
         strokeWidth={Math.max(1.5, 0.08 * h)}
         strokeCap="round"
-        color={theme.colors.heliBodyBottom}
+        color={skin.heliBodyBottom}
       />
-      <Path path={paths.mast} color={theme.colors.heliBodyBottom} />
+      <Path path={paths.mast} color={skin.heliBodyBottom} />
       <Path path={paths.body}>
         <LinearGradient
           start={vec(0, -0.5 * h)}
           end={vec(0, 0.5 * h)}
-          colors={[theme.colors.heliBodyTop, theme.colors.heliBodyBottom]}
+          colors={[skin.heliBodyTop, skin.heliBodyBottom]}
         />
       </Path>
-      <Path path={paths.canopy} color={theme.colors.canopyGlow} opacity={0.9}>
+      <Path path={paths.canopy} color={skin.canopyGlow} opacity={0.9}>
         <BlurMask blur={3} style="solid" />
       </Path>
       <Group
@@ -107,21 +110,21 @@ export function Helicopter({
       >
         <Path
           path={paths.rotorDisc}
-          color={theme.colors.heliRotor}
+          color={skin.heliRotor}
           opacity={0.12}
         />
       </Group>
       <Group transform={rotorTransform}>
         <Path
           path={paths.rotorBlade}
-          color={theme.colors.heliRotor}
+          color={skin.heliRotor}
           opacity={0.85}
         />
       </Group>
       <Group transform={tailRotorTransform}>
         <Path
           path={paths.tailRotorBlade}
-          color={theme.colors.heliRotor}
+          color={skin.heliRotor}
           opacity={0.8}
         />
       </Group>
@@ -129,7 +132,7 @@ export function Helicopter({
         cx={paths.navLight.x}
         cy={paths.navLight.y}
         r={Math.max(1.5, 0.06 * h)}
-        color={theme.colors.navLight}
+        color={skin.navLight}
         opacity={navOpacity}
       >
         <BlurMask blur={3} style="solid" />
