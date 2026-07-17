@@ -113,6 +113,12 @@ export const config = {
     basePointsPerShu: 120,
   },
 
+  coins: {
+    /** End-of-run reward: one coin per this many points banked (there are
+     * no in-world pickups — the score IS the coin income). */
+    pointsPerCoin: 1000,
+  },
+
   ui: {
     /** Seconds after death before a tap is accepted as retry (anti-mash). */
     retryLockoutSeconds: 0.35,

@@ -33,6 +33,8 @@ export const theme = {
     dust: 'rgba(190, 205, 225, 0.28)',
     hud: '#dce3ec',
     amber: '#ffb648',
+    /** Coin wallet / reward displays. */
+    coinGold: '#ffd34d',
   },
 
   /** Per-zone cave palettes (indexes match config.zones). zones[0] mirrors

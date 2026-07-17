@@ -18,6 +18,8 @@ interface Settings {
   /** Best score and the distance of that same run. */
   bestScore: number;
   bestDistance: number;
+  /** Lifetime coin wallet — earned from run scores, spent in the shop. */
+  totalCoins: number;
 }
 
 const DEFAULTS: Settings = {
@@ -25,13 +27,15 @@ const DEFAULTS: Settings = {
   hapticsEnabled: true,
   bestScore: 0,
   bestDistance: 0,
+  totalCoins: 0,
 };
 
 interface SettingsContextValue extends Settings {
   setSoundEnabled: (on: boolean) => void;
   setHapticsEnabled: (on: boolean) => void;
-  /** Called on death; keeps the best run if this one beat it. */
-  recordRun: (score: number, distance: number) => void;
+  /** Called on death; banks the run's coins and keeps the best run if this
+   * one beat it. */
+  recordRun: (score: number, distance: number, coins: number) => void;
   resetBest: () => void;
 }
 
@@ -74,10 +78,18 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     [patch],
   );
   const recordRun = useCallback(
-    (score: number, distance: number) => {
+    (score: number, distance: number, coins: number) => {
       setSettings((prev) => {
-        if (score <= prev.bestScore) return prev;
-        const next = { ...prev, bestScore: score, bestDistance: distance };
+        const best =
+          score > prev.bestScore
+            ? { bestScore: score, bestDistance: distance }
+            : null;
+        if (best === null && coins <= 0) return prev;
+        const next = {
+          ...prev,
+          ...best,
+          totalCoins: prev.totalCoins + Math.max(0, coins),
+        };
         AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
         return next;
       });

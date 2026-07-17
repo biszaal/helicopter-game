@@ -122,6 +122,7 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
   const [gameOver, setGameOver] = useState<{
     score: number;
     distance: number;
+    coins: number;
   } | null>(null);
   const [announce, setAnnounce] = useState<{
     name: string;
@@ -151,11 +152,12 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
   }, []);
 
   const handleDeath = (finalScore: number, distance: number) => {
-    setGameOver({ score: finalScore, distance });
+    const coins = Math.floor(finalScore / config.coins.pointsPerCoin);
+    setGameOver({ score: finalScore, distance, coins });
     stopRotor();
     playCrash();
     hapticCrash();
-    recordRun(finalScore, distance);
+    recordRun(finalScore, distance, coins);
   };
   const handleRetry = () => {
     setGameOver(null);
@@ -442,6 +444,9 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
             <Text style={styles.overlayTitle}>GAME OVER</Text>
             <Text style={styles.overlayScore}>{gameOver.score}</Text>
             <Text style={styles.overlayDistance}>{gameOver.distance} m</Text>
+            {gameOver.coins > 0 && (
+              <Text style={styles.overlayCoins}>+{gameOver.coins} COINS</Text>
+            )}
             <Text style={styles.overlayHint}>TAP TO RETRY</Text>
             <View style={styles.overlayMenuButton}>
               <GameButton
@@ -527,6 +532,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginTop: 4,
+  },
+  overlayCoins: {
+    color: theme.colors.coinGold,
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 2,
+    marginTop: 10,
   },
   overlayHint: {
     color: '#8a94a3',
