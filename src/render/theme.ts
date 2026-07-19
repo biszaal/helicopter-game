@@ -263,6 +263,23 @@ export const theme = {
     overlayDelayMs: 600,
     overlayFadeMs: 450,
   },
+
+  /** In-game camera: a purely cosmetic magnification of the world around
+   * screen centre (background, HUD and graze vignette stay unscaled). The
+   * world spans the full screen height, so zooming crops into the kill
+   * walls — keep ≤ ~1.08 or the wall kill line (wallThickness 0.045 shu)
+   * slides off-screen and invisible danger breaks the fairness rule. */
+  camera: {
+    zoom: 1.07,
+  },
+
+  /** Boot loading screen: it stays up at least minDisplayMs (so the bar can
+   * finish its sweep even when hydration is instant), then fades out over
+   * the already-mounted menu — the scenes match, so it reads as one shot. */
+  loading: {
+    minDisplayMs: 1400,
+    fadeOutMs: 450,
+  },
 } as const;
 
 export type SkinId = keyof typeof theme.heliSkins;

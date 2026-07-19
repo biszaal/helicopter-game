@@ -18,6 +18,17 @@ interface MenuScreenProps {
   onShop: () => void;
 }
 
+/** Landscape split: the helicopter hovering on the left (same x as its
+ * in-game flight position, so PLAY feels continuous), title + buttons in a
+ * right column. */
+export const MENU_HELI_X_RATIO = 0.3;
+export const MENU_HELI_Y = 0.4;
+/** Showcase scale. The sprite formula (0.09 × screenHeight) matches the
+ * game exactly, but landscape height makes that read small on a menu — so
+ * the hero heli is drawn off an inflated reference height, the same trick
+ * as the shop previews. renderY must be divided back by this. */
+export const MENU_HELI_SCALE = 2;
+
 /**
  * Main menu: the live cave backdrop with a gently hovering helicopter,
  * driven by a local clock — the real game loop is not running here.
@@ -31,8 +42,12 @@ export function MenuScreen({ onPlay, onSettings, onShop }: MenuScreenProps) {
     clockMs.value = frame.timestamp;
   });
   const scroll = useDerivedValue(() => (clockMs.value / 1000) * 0.05);
+  // Divided by the scale because the Helicopter multiplies renderY by the
+  // (inflated) screenHeight it is given.
   const renderY = useDerivedValue(
-    () => 0.4 + Math.sin((clockMs.value / 1000) * 0.8) * 0.018,
+    () =>
+      (MENU_HELI_Y + Math.sin((clockMs.value / 1000) * 0.8) * 0.018) /
+      MENU_HELI_SCALE,
   );
   // Exaggerated pseudo-velocity so the hover reads as a gentle rocking.
   const velY = useDerivedValue(
@@ -50,8 +65,8 @@ export function MenuScreen({ onPlay, onSettings, onShop }: MenuScreenProps) {
           wallClockMs={clockMs}
         />
         <Helicopter
-          centerX={width * 0.5}
-          screenHeight={height}
+          centerX={width * MENU_HELI_X_RATIO}
+          screenHeight={height * MENU_HELI_SCALE}
           renderY={renderY}
           velY={velY}
           phase={phase}
@@ -72,7 +87,7 @@ export function MenuScreen({ onPlay, onSettings, onShop }: MenuScreenProps) {
             <Text style={styles.coins}>● {totalCoins} COINS</Text>
           )}
         </View>
-        <View style={styles.buttons}>
+        <View style={styles.actionArea}>
           <GameButton label="PLAY" onPress={onPlay} />
           <GameButton label="SHOP" variant="secondary" onPress={onShop} />
           <GameButton label="SETTINGS" variant="secondary" onPress={onSettings} />
@@ -87,15 +102,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.backgroundTop,
   },
+  // Right column, clear of the landscape notch; the LoadingScreen mirrors
+  // this geometry exactly so the boot fade lines up.
   content: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: '18%',
-    paddingBottom: '14%',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    paddingRight: 64,
+    gap: 28,
   },
   titleBlock: {
-    alignItems: 'center',
+    alignItems: 'flex-end',
   },
   titleTop: {
     color: theme.colors.amber,
@@ -124,8 +141,12 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     marginTop: 8,
   },
-  buttons: {
-    gap: 16,
-    alignItems: 'center',
+  /** Fixed-height slot shared with LoadingScreen (bar lives where the
+   * buttons appear) so the title never shifts during the boot crossfade. */
+  actionArea: {
+    height: 200,
+    gap: 14,
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
   },
 });

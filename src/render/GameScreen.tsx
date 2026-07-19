@@ -4,6 +4,7 @@ import {
   matchFont,
   Rect,
   Text as SkiaText,
+  vec,
 } from '@shopify/react-native-skia';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -62,14 +63,9 @@ interface GameScreenProps {
 
 export function GameScreen({ onExitToMenu }: GameScreenProps) {
   const { width, height } = useWindowDimensions();
-  // Letterbox: on a wide screen (iPad / Mac / desktop web) cap the playfield
-  // width and centre it, so reaction distance is identical everywhere and wide
-  // screens aren't unfairly easy. Phones stay full-bleed (width ≤ the cap).
-  const playWidth = Math.min(width, height * config.world.maxPlayAspect);
-  const playOffsetX = (width - playWidth) / 2;
   const { recordRun, selectedSkin } = useSettings();
   const skin = getSkin(selectedSkin);
-  const loop = useGameLoop(playWidth / height);
+  const loop = useGameLoop(width / height);
   const gesture = useSteerGesture(loop, height);
   const {
     renderY,
@@ -240,7 +236,7 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
     return { opacity };
   });
 
-  const heliCenterX = playWidth * config.helicopter.fixedXRatio;
+  const heliCenterX = width * config.helicopter.fixedXRatio;
 
   /** Seconds since death — negative while flying. Drives crash + shake. */
   const crashT = useDerivedValue(() =>
@@ -250,11 +246,10 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
   );
   const shakeTransform = useScreenShake(crashT);
 
-  // HUD layout (cosmetic) — a left-aligned column under the top wall. Sized
-  // against the playfield so it stays glued to the play area when letterboxed.
-  const hudX = playWidth * 0.06;
+  // HUD layout (cosmetic) — a left-aligned column under the top wall.
+  const hudX = width * 0.06;
   const hudTop = height * 0.09;
-  const barMaxWidth = playWidth * 0.24;
+  const barMaxWidth = width * 0.24;
   const barY = hudTop + 44;
   const barHeight = 5;
 
@@ -277,10 +272,9 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
     <View style={styles.root}>
       <GestureDetector gesture={gesture}>
         <Canvas style={styles.canvas}>
-         <Group transform={[{ translateX: playOffsetX }]}>
           <Group transform={shakeTransform}>
             <Background
-              width={playWidth}
+              width={width}
               height={height}
               renderScrollX={renderScrollX}
               wallClockMs={wallClockMs}
@@ -289,59 +283,66 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
               ridgeNear={ridgeNear}
               zoneBlend={zoneBlend}
             />
-            {pinches.map((slot, i) => (
-              <Pinch
-                key={i}
-                slot={slot}
-                index={i}
-                screenHeight={height}
+            {/* World layers under the camera zoom; the background stays
+                unscaled — it's atmosphere, and parallax hides the seam. */}
+            <Group
+              transform={[{ scale: theme.camera.zoom }]}
+              origin={vec(width / 2, height / 2)}
+            >
+              {pinches.map((slot, i) => (
+                <Pinch
+                  key={i}
+                  slot={slot}
+                  index={i}
+                  screenHeight={height}
+                  renderScrollX={renderScrollX}
+                  color={wallInner}
+                />
+              ))}
+              {rocks.map((slot, i) => (
+                <Rock
+                  key={i}
+                  slot={slot}
+                  screenHeight={height}
+                  renderScrollX={renderScrollX}
+                  fill={rockFill}
+                />
+              ))}
+              <CaveWalls
+                width={width}
+                height={height}
                 renderScrollX={renderScrollX}
-                color={wallInner}
+                topGradient={wallTopGradient}
+                bottomGradient={wallBottomGradient}
+                teethColor={wallInner}
               />
-            ))}
-            {rocks.map((slot, i) => (
-              <Rock
-                key={i}
-                slot={slot}
+              <Helicopter
+                centerX={heliCenterX}
                 screenHeight={height}
-                renderScrollX={renderScrollX}
-                fill={rockFill}
+                renderY={renderY}
+                velY={velY}
+                phase={phase}
+                wallClockMs={wallClockMs}
+                skin={skin}
               />
-            ))}
-            <CaveWalls
-              width={playWidth}
-              height={height}
-              renderScrollX={renderScrollX}
-              topGradient={wallTopGradient}
-              bottomGradient={wallBottomGradient}
-              teethColor={wallInner}
-            />
-            <Helicopter
-              centerX={heliCenterX}
-              screenHeight={height}
-              renderY={renderY}
-              velY={velY}
-              phase={phase}
-              wallClockMs={wallClockMs}
-              skin={skin}
-            />
-            <GrazeSparks
-              centerX={heliCenterX}
-              screenHeight={height}
-              grazeY={grazeY}
-              grazeSeed={grazeSeed}
-              grazeAtMs={grazeAtMs}
-              wallClockMs={wallClockMs}
-            />
-            <CrashEffect
-              centerX={heliCenterX}
-              screenHeight={height}
-              renderY={renderY}
-              crashT={crashT}
-            />
+              <GrazeSparks
+                centerX={heliCenterX}
+                screenHeight={height}
+                grazeY={grazeY}
+                grazeSeed={grazeSeed}
+                grazeAtMs={grazeAtMs}
+                wallClockMs={wallClockMs}
+              />
+              <CrashEffect
+                centerX={heliCenterX}
+                screenHeight={height}
+                renderY={renderY}
+                crashT={crashT}
+              />
+            </Group>
           </Group>
           <GrazePulse
-            width={playWidth}
+            width={width}
             height={height}
             tierIndex={tierIndex}
             grazeAtMs={grazeAtMs}
@@ -389,7 +390,6 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
             font={distanceFont}
             color={theme.colors.hud}
           />
-         </Group>
         </Canvas>
       </GestureDetector>
       {announce !== null && (
@@ -405,7 +405,7 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
         <View
           style={[
             styles.pauseButton,
-            { top: height * 0.055, right: playOffsetX + playWidth * 0.05 },
+            { top: height * 0.055, right: width * 0.05 },
           ]}
         >
           <GameButton

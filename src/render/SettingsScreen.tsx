@@ -67,8 +67,12 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: theme.colors.backgroundTop,
-    paddingTop: '20%',
+    // Fixed paddings: percentages resolve against the parent's WIDTH in RN,
+    // which blew out into a giant blank band once the app went landscape.
+    paddingTop: 26,
+    paddingBottom: 14,
     paddingHorizontal: 28,
+    alignItems: 'center',
   },
   title: {
     color: theme.colors.hud,
@@ -76,10 +80,14 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 8,
     textAlign: 'center',
-    marginBottom: 40,
+    marginBottom: 28,
   },
   rows: {
     gap: 22,
+    width: '100%',
+    // Landscape: keep the rows a readable width instead of stretching the
+    // labels and switches to opposite edges of the screen.
+    maxWidth: 480,
   },
   row: {
     flexDirection: 'row',
@@ -105,6 +113,5 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
     alignItems: 'center',
-    paddingBottom: '14%',
   },
 });

@@ -3,7 +3,7 @@
     "name": "helicopter",
     "slug": "helicopter",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "landscape",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#14181f",

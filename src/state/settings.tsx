@@ -43,6 +43,9 @@ const DEFAULTS: Settings = {
 };
 
 interface SettingsContextValue extends Settings {
+  /** True once persisted settings have been read (or defaulted on error) —
+   * until then bestScore/wallet still hold DEFAULTS, not the real values. */
+  hydrated: boolean;
   setSoundEnabled: (on: boolean) => void;
   setHapticsEnabled: (on: boolean) => void;
   /** Called on death; banks the run's coins and keeps the best run if this
@@ -59,6 +62,7 @@ const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
@@ -72,7 +76,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           );
         }
       })
-      .catch(() => {}); // unreadable storage: keep defaults
+      .catch(() => {}) // unreadable storage: keep defaults
+      .finally(() => setHydrated(true));
   }, []);
 
   // The audio/haptics modules keep their own flags so UI-thread game events
@@ -146,6 +151,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     <SettingsContext.Provider
       value={{
         ...settings,
+        hydrated,
         setSoundEnabled,
         setHapticsEnabled,
         recordRun,

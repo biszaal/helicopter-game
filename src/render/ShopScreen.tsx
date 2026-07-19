@@ -74,25 +74,28 @@ function SkinCard({
         <Text style={styles.cardName}>{name}</Text>
         {!owned && <Text style={styles.cardPrice}>● {price}</Text>}
       </View>
-      {equipped ? (
-        <Text style={styles.equippedBadge}>EQUIPPED</Text>
-      ) : owned ? (
-        <GameButton
-          label="EQUIP"
-          variant="secondary"
-          compact
-          onPress={() => selectSkin(id)}
-        />
-      ) : affordable ? (
-        <GameButton label="BUY" compact onPress={() => purchaseSkin(id)} />
-      ) : (
-        <Text style={styles.lockedBadge}>BUY</Text>
-      )}
+      <View style={styles.cardAction}>
+        {equipped ? (
+          <Text style={styles.equippedBadge}>EQUIPPED</Text>
+        ) : owned ? (
+          <GameButton
+            label="EQUIP"
+            variant="secondary"
+            compact
+            onPress={() => selectSkin(id)}
+          />
+        ) : affordable ? (
+          <GameButton label="BUY" compact onPress={() => purchaseSkin(id)} />
+        ) : (
+          <Text style={styles.lockedBadge}>BUY</Text>
+        )}
+      </View>
     </View>
   );
 }
 
-/** The hangar: buy and equip helicopter skins with run-earned coins. */
+/** The hangar: a landscape carousel of skins — swipe sideways, buy and
+ * equip with run-earned coins. */
 export function ShopScreen({ onBack }: ShopScreenProps) {
   const { totalCoins } = useSettings();
 
@@ -104,23 +107,27 @@ export function ShopScreen({ onBack }: ShopScreenProps) {
 
   return (
     <View style={styles.root}>
-      <Text style={styles.title}>SHOP</Text>
-      <Text style={styles.wallet}>● {totalCoins}</Text>
-      <ScrollView
-        style={styles.list}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {config.shop.skins.map((skin) => (
-          <SkinCard
-            key={skin.id}
-            id={skin.id}
-            name={skin.name}
-            price={skin.price}
-            clockMs={clockMs}
-          />
-        ))}
-      </ScrollView>
+      <View style={styles.header}>
+        <Text style={styles.title}>SHOP</Text>
+        <Text style={styles.wallet}>● {totalCoins}</Text>
+      </View>
+      <View style={styles.listWrap}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.listContent}
+        >
+          {config.shop.skins.map((skin) => (
+            <SkinCard
+              key={skin.id}
+              id={skin.id}
+              name={skin.name}
+              price={skin.price}
+              clockMs={clockMs}
+            />
+          ))}
+        </ScrollView>
+      </View>
       <View style={styles.footer}>
         <GameButton label="BACK" variant="secondary" onPress={onBack} />
       </View>
@@ -132,42 +139,46 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: theme.colors.backgroundTop,
-    paddingTop: '16%',
-    paddingHorizontal: 24,
+    paddingTop: 22,
+    paddingBottom: 14,
+  },
+  header: {
+    alignItems: 'center',
   },
   title: {
     color: theme.colors.hud,
     fontSize: 28,
     fontWeight: '800',
     letterSpacing: 8,
-    textAlign: 'center',
   },
   wallet: {
     color: theme.colors.coinGold,
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 2,
-    textAlign: 'center',
-    marginTop: 8,
-    marginBottom: 18,
+    marginTop: 6,
   },
-  list: {
+  listWrap: {
     flex: 1,
+    justifyContent: 'center',
   },
+  // Grows so short lists centre on wide screens (iPad/Mac); the side
+  // padding keeps the first card clear of the landscape notch.
   listContent: {
-    gap: 14,
-    paddingBottom: 16,
-  },
-  card: {
-    flexDirection: 'row',
+    flexGrow: 1,
+    justifyContent: 'center',
     alignItems: 'center',
     gap: 14,
+    paddingHorizontal: 56,
+  },
+  card: {
+    width: 176,
+    alignItems: 'center',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(220, 227, 236, 0.1)',
     backgroundColor: 'rgba(14, 19, 27, 0.85)',
-    paddingVertical: 10,
-    paddingRight: 16,
+    paddingVertical: 14,
   },
   cardEquipped: {
     borderColor: 'rgba(255, 182, 72, 0.55)',
@@ -176,8 +187,12 @@ const styles = StyleSheet.create({
     width: PREVIEW_W,
     height: PREVIEW_H,
   },
+  /** Fixed height so BUY/EQUIP rows line up across cards with and without
+   * a price line. */
   cardInfo: {
-    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 46,
   },
   cardName: {
     color: theme.colors.hud,
@@ -190,6 +205,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     marginTop: 4,
+  },
+  cardAction: {
+    height: 38,
+    justifyContent: 'center',
   },
   equippedBadge: {
     color: theme.colors.amber,
@@ -210,7 +229,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   footer: {
-    paddingVertical: 18,
+    paddingTop: 10,
     alignItems: 'center',
   },
 });
