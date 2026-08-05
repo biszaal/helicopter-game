@@ -109,6 +109,31 @@ export function doublePinchCentres(
 }
 
 /**
+ * Where a pinch about to spawn must actually enter the world.
+ *
+ * Rocks and pinches both spawn at the right screen edge, and a rock never
+ * knows a pinch is coming — so a rock spawned moments ago can already be
+ * sitting inside the incoming pinch's rock-free margin, at any y, including
+ * dead centre of the corridor. That is an unflyable seal.
+ *
+ * Rocks refuse to spawn inside an ACTIVE pinch's span, so the fix is
+ * one-directional too: slide the pinch right until every rock in the world
+ * clears its left margin. The pinch is off-screen at this point, so the
+ * shift is invisible; rocks only ever exist to the LEFT of the farthest one,
+ * so a single pass is enough.
+ */
+export function pinchEntryX(desiredX: number, rocks: OccupiedRect[]): number {
+  'worklet';
+  const margin = config.pinch.rockFreeMargin;
+  let entry = desiredX;
+  for (let i = 0; i < rocks.length; i++) {
+    const needed = rocks[i].x2 + margin;
+    if (needed > entry) entry = needed;
+  }
+  return entry;
+}
+
+/**
  * Pick a y for a rock wall's gap so the gap band clears every blocker near
  * the wall's x span. Returns null when nothing fits — the wall is skipped
  * (the tunnel is never sealed).

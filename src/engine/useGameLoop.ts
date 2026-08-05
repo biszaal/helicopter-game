@@ -9,6 +9,7 @@ import { rectsOverlap } from './collision';
 import { applyGrazes, stepDecay } from './scoring';
 import {
   doublePinchCentres,
+  pinchEntryX,
   pinchSpurs,
   placeRock,
   placeWallGap,
@@ -151,7 +152,23 @@ export function useGameLoop(aspectRatio: number): GameLoop {
   const spawnPinch = (scroll: number) => {
     'worklet';
     const dp = config.behaviors.doublePinch;
-    const enterX = scroll + aspectRatio;
+
+    // A rock spawned moments ago may already sit where this pinch wants to
+    // be — and it was placed with no idea a corridor was coming, so it can
+    // seal the gap. Slide the pinch right until every rock clears its margin.
+    const live: OccupiedRect[] = [];
+    for (let i = 0; i < rocks.length; i++) {
+      const r = rocks[i];
+      if (r.active.value === 0) continue;
+      live.push({
+        x1: r.worldX.value - r.halfW.value,
+        x2: r.worldX.value + r.halfW.value,
+        y1: 0,
+        y2: 1,
+      });
+    }
+    const enterX = pinchEntryX(scroll + aspectRatio, live);
+
     if (zoneIndexAt(scroll) >= dp.unlockZone && Math.random() < dp.chance) {
       // An S-curve: two spans, corridors offset to opposite sides. The
       // stretch between them sits inside both rock-free margins.

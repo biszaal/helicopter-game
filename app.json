@@ -38,7 +38,12 @@
     },
     "owner": "biszaaltech",
     "plugins": [
-      "expo-audio"
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": false
+        }
+      ]
     ]
   }
 }

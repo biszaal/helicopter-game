@@ -5,6 +5,7 @@ import {
   spursFor,
   wallSegments,
   pinchGapAt,
+  pinchEntryX,
   placeRock,
   rampAt,
   sizeScaleAt,
@@ -118,6 +119,39 @@ describe('doublePinchCentres', () => {
     for (const centre of [c.first, c.second]) {
       expect(centre - c.gap / 2).toBeGreaterThanOrEqual(wall);
       expect(centre + c.gap / 2).toBeLessThanOrEqual(1 - wall);
+    }
+  });
+});
+
+describe('pinchEntryX', () => {
+  // config.pinch.rockFreeMargin = 0.18.
+  test('an empty tunnel keeps the desired entry x', () => {
+    expect(pinchEntryX(2.16, [])).toBe(2.16);
+  });
+  test('a rock inside the left margin pushes the pinch past it', () => {
+    // Rock spawned a moment ago, still within margin of the entry point.
+    const rocks = [{ x1: 2.0, x2: 2.1, y1: 0.4, y2: 0.6 }];
+    expect(pinchEntryX(2.16, rocks)).toBeCloseTo(2.28);
+  });
+  test('the farthest conflicting rock wins', () => {
+    const rocks = [
+      { x1: 2.0, x2: 2.1, y1: 0.4, y2: 0.6 },
+      { x1: 2.05, x2: 2.2, y1: 0.1, y2: 0.3 },
+    ];
+    expect(pinchEntryX(2.16, rocks)).toBeCloseTo(2.38);
+  });
+  test('rocks already clear of the margin do not shift anything', () => {
+    const rocks = [{ x1: 1.5, x2: 1.6, y1: 0.4, y2: 0.6 }];
+    expect(pinchEntryX(2.16, rocks)).toBe(2.16);
+  });
+  test('every rock ends up outside the returned span and its margins', () => {
+    const rocks = [
+      { x1: 1.9, x2: 2.05, y1: 0.4, y2: 0.6 },
+      { x1: 2.1, x2: 2.24, y1: 0.1, y2: 0.3 },
+    ];
+    const entry = pinchEntryX(2.16, rocks);
+    for (const r of rocks) {
+      expect(r.x2).toBeLessThanOrEqual(entry - 0.18 + 1e-9);
     }
   });
 });
