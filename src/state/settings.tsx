@@ -30,6 +30,8 @@ interface Settings {
   ownedSkins: string[];
   /** The equipped skin — always one of ownedSkins. */
   selectedSkin: string;
+  /** Claimed leaderboard username, or null if never claimed. */
+  username: string | null;
 }
 
 const DEFAULTS: Settings = {
@@ -40,6 +42,7 @@ const DEFAULTS: Settings = {
   totalCoins: 0,
   ownedSkins: [FREE_SKIN_ID],
   selectedSkin: FREE_SKIN_ID,
+  username: null,
 };
 
 interface SettingsContextValue extends Settings {
@@ -56,6 +59,8 @@ interface SettingsContextValue extends Settings {
   purchaseSkin: (id: string) => void;
   /** Equip an owned skin; no-op otherwise. */
   selectSkin: (id: string) => void;
+  /** Records the leaderboard username after a successful claim. */
+  setUsername: (name: string) => void;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -146,6 +151,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     (id: string) => applyWallet((prev) => applySelect(prev, id)),
     [applyWallet],
   );
+  const setUsername = useCallback(
+    (name: string) => patch({ username: name }),
+    [patch],
+  );
 
   return (
     <SettingsContext.Provider
@@ -158,6 +167,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         resetBest,
         purchaseSkin,
         selectSkin,
+        setUsername,
       }}
     >
       {children}
