@@ -16,6 +16,7 @@ interface MenuScreenProps {
   onPlay: () => void;
   onSettings: () => void;
   onShop: () => void;
+  onLeaderboard: () => void;
 }
 
 /** Landscape split: the helicopter hovering on the left (same x as its
@@ -33,7 +34,12 @@ export const MENU_HELI_SCALE = 2;
  * Main menu: the live cave backdrop with a gently hovering helicopter,
  * driven by a local clock — the real game loop is not running here.
  */
-export function MenuScreen({ onPlay, onSettings, onShop }: MenuScreenProps) {
+export function MenuScreen({
+  onPlay,
+  onSettings,
+  onShop,
+  onLeaderboard,
+}: MenuScreenProps) {
   const { width, height } = useWindowDimensions();
   const { bestScore, bestDistance, totalCoins, selectedSkin } = useSettings();
 
@@ -90,6 +96,11 @@ export function MenuScreen({ onPlay, onSettings, onShop }: MenuScreenProps) {
         <View style={styles.actionArea}>
           <GameButton label="PLAY" onPress={onPlay} />
           <GameButton label="SHOP" variant="secondary" onPress={onShop} />
+          <GameButton
+            label="LEADERBOARD"
+            variant="secondary"
+            onPress={onLeaderboard}
+          />
           <GameButton label="SETTINGS" variant="secondary" onPress={onSettings} />
         </View>
       </View>
@@ -144,7 +155,7 @@ const styles = StyleSheet.create({
   /** Fixed-height slot shared with LoadingScreen (bar lives where the
    * buttons appear) so the title never shifts during the boot crossfade. */
   actionArea: {
-    height: 200,
+    height: 260,
     gap: 14,
     alignItems: 'flex-end',
     justifyContent: 'flex-start',

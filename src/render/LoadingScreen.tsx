@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
   /** Same fixed slot as the menu's button stack — the bar sits where PLAY
    * will appear. */
   actionArea: {
-    height: 200,
+    height: 260,
     gap: 12,
     alignItems: 'flex-end',
     justifyContent: 'flex-start',

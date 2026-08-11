@@ -4,13 +4,14 @@ import { StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initAudio } from './src/audio/sounds';
 import { GameScreen } from './src/render/GameScreen';
+import { LeaderboardScreen } from './src/render/LeaderboardScreen';
 import { LoadingScreen } from './src/render/LoadingScreen';
 import { MenuScreen } from './src/render/MenuScreen';
 import { SettingsScreen } from './src/render/SettingsScreen';
 import { ShopScreen } from './src/render/ShopScreen';
 import { SettingsProvider, useSettings } from './src/state/settings';
 
-type Screen = 'menu' | 'game' | 'settings' | 'shop';
+type Screen = 'menu' | 'game' | 'settings' | 'shop' | 'leaderboard';
 
 function Root() {
   const [screen, setScreen] = useState<Screen>('menu');
@@ -35,12 +36,16 @@ function Root() {
     case 'shop':
       current = <ShopScreen onBack={() => setScreen('menu')} />;
       break;
+    case 'leaderboard':
+      current = <LeaderboardScreen onBack={() => setScreen('menu')} />;
+      break;
     default:
       current = (
         <MenuScreen
           onPlay={() => setScreen('game')}
           onSettings={() => setScreen('settings')}
           onShop={() => setScreen('shop')}
+          onLeaderboard={() => setScreen('leaderboard')}
         />
       );
   }
