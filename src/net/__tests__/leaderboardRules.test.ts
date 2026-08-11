@@ -75,4 +75,7 @@ describe('isPlausibleRun', () => {
     expect(isPlausibleRun(-1, 100, 1000)).toBe(false);
     expect(isPlausibleRun(100, 100, 0)).toBe(false);
   });
+  test('rejects a duration beyond the absolute ceiling even with an otherwise-plausible score', () => {
+    expect(isPlausibleRun(100, 100, 3_600_001)).toBe(false);
+  });
 });
