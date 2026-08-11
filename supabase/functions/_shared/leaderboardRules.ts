@@ -2,7 +2,7 @@
 // deploy independently of the RN app and can't import from src/, so this
 // is a manual copy — if you change one, change both. The only difference
 // from the client copy is the `npm:` import specifier Deno needs.
-import Filter from 'npm:bad-words@^4';
+import { Filter } from 'npm:bad-words@^4';
 
 const filter = new Filter();
 // Ensure compound profanities are caught
