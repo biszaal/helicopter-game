@@ -1,4 +1,8 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+// Deployed via the Supabase MCP deploy_edge_function tool, which nests
+// uploaded files under its own source/ dir — the deploy call's files array
+// must use './_shared/leaderboardRules.ts' even though this file (matching
+// the real repo layout) correctly imports '../_shared/leaderboardRules.ts'.
 import { isValidUsernameFormat, containsBlockedWord } from '../_shared/leaderboardRules.ts';
 
 const supabase = createClient(
@@ -7,11 +11,20 @@ const supabase = createClient(
 );
 
 Deno.serve(async (req) => {
+  const jwt = req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
+  if (!jwt) {
+    return Response.json({ ok: false, reason: 'invalid' }, { status: 401 });
+  }
+  const { data: authData, error: authError } = await supabase.auth.getUser(jwt);
+  if (authError || !authData.user) {
+    return Response.json({ ok: false, reason: 'invalid' }, { status: 401 });
+  }
+  const playerId = authData.user.id;
+
   const body = await req.json().catch(() => null);
-  const playerId = body?.playerId;
   const username = body?.username;
 
-  if (typeof playerId !== 'string' || typeof username !== 'string') {
+  if (typeof username !== 'string') {
     return Response.json({ ok: false, reason: 'invalid' }, { status: 400 });
   }
   if (!isValidUsernameFormat(username)) {
