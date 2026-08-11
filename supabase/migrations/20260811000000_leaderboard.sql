@@ -22,18 +22,23 @@ create policy "public read" on leaderboard
   using (true);
 
 -- Returns this player's 1-indexed rank by best_score, or null if they have
--- no row yet (a SQL function returns null when its query yields zero rows).
+-- no row yet.
 create or replace function get_rank(p_player_id uuid)
 returns integer
 language sql
 stable
 as $$
-  select count(*) + 1
-  from leaderboard l
-  where l.best_score > (
-    select best_score from leaderboard where player_id = p_player_id
-  )
-  and exists (select 1 from leaderboard where player_id = p_player_id);
+  select case
+    when exists (select 1 from leaderboard where player_id = p_player_id)
+      then (
+        select count(*) + 1
+        from leaderboard l
+        where l.best_score > (
+          select best_score from leaderboard where player_id = p_player_id
+        )
+      )
+    else null
+  end;
 $$;
 
 grant execute on function get_rank(uuid) to anon;
