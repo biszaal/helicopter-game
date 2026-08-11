@@ -32,6 +32,7 @@ import {
   stopRotor,
 } from '../audio/sounds';
 import { config } from '../config';
+import { submitScore } from '../net/leaderboardApi';
 import { rampAt } from '../engine/spawning';
 import {
   PHASE_DEAD,
@@ -63,7 +64,7 @@ interface GameScreenProps {
 
 export function GameScreen({ onExitToMenu }: GameScreenProps) {
   const { width, height } = useWindowDimensions();
-  const { recordRun, selectedSkin } = useSettings();
+  const { recordRun, selectedSkin, bestScore, username } = useSettings();
   const skin = getSkin(selectedSkin);
   const loop = useGameLoop(width / height);
   const gesture = useSteerGesture(loop, height);
@@ -85,6 +86,7 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
     grazeAtMs,
     grazeY,
     grazeSeed,
+    elapsed,
     rocks,
     pinches,
   } = loop;
@@ -148,12 +150,18 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
     return stopRotor;
   }, []);
 
-  const handleDeath = (finalScore: number, distance: number) => {
+  const handleDeath = (finalScore: number, distance: number, runDurationMs: number) => {
     const coins = Math.floor(finalScore / config.coins.pointsPerCoin);
     setGameOver({ score: finalScore, distance, coins });
     stopRotor();
     playCrash();
     hapticCrash();
+    // Fire-and-forget: no username claimed yet, or a network failure,
+    // should never interrupt the death screen. Checked BEFORE recordRun,
+    // which is what actually updates bestScore.
+    if (finalScore > bestScore && username !== null) {
+      submitScore(finalScore, distance, runDurationMs).catch(() => {});
+    }
     recordRun(finalScore, distance, coins);
   };
   const handleRetry = () => {
@@ -168,6 +176,7 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
         runOnJS(handleDeath)(
           Math.floor(score.value),
           Math.floor(scrollX.value * config.scoring.metersPerShu),
+          Math.floor(elapsed.value * 1000),
         );
       } else if (current === PHASE_PLAYING && previous === PHASE_DEAD) {
         runOnJS(handleRetry)();

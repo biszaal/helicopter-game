@@ -72,6 +72,9 @@ export interface GameLoop {
   grazeY: SharedValue<number>;
   /** 0..1 per-burst seed — cosmetic variety only. */
   grazeSeed: SharedValue<number>;
+  /** Run time (s) since the last resetRun — how long the current attempt
+   * has lasted. */
+  elapsed: SharedValue<number>;
   /** Pooled world objects, for rendering. */
   rocks: RockSlot[];
   pinches: PinchSlot[];
@@ -641,6 +644,7 @@ export function useGameLoop(aspectRatio: number): GameLoop {
     grazeAtMs,
     grazeY,
     grazeSeed,
+    elapsed,
     rocks,
     pinches,
     resetRun,
