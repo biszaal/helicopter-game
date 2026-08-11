@@ -75,18 +75,26 @@ create policy "public read" on leaderboard
   using (true);
 
 -- Returns this player's 1-indexed rank by best_score, or null if they have
--- no row yet (a SQL function returns null when its query yields zero rows).
+-- no row yet. NOTE: a bare `select count(*) + 1 ... where exists(...)` does
+-- NOT do this — count(*) over zero matching rows is 0, not "no rows", so
+-- the function would always return a row (1 for an unranked player, which
+-- is wrong). The CASE below is what actually short-circuits to NULL.
 create or replace function get_rank(p_player_id uuid)
 returns integer
 language sql
 stable
 as $$
-  select count(*) + 1
-  from leaderboard l
-  where l.best_score > (
-    select best_score from leaderboard where player_id = p_player_id
-  )
-  and exists (select 1 from leaderboard where player_id = p_player_id);
+  select case
+    when exists (select 1 from leaderboard where player_id = p_player_id)
+      then (
+        select count(*) + 1
+        from leaderboard l
+        where l.best_score > (
+          select best_score from leaderboard where player_id = p_player_id
+        )
+      )
+    else null
+  end;
 $$;
 
 grant execute on function get_rank(uuid) to anon;
@@ -107,12 +115,13 @@ Call `apply_migration`:
 
 Call `list_tables` with `project_id: PROJECT_ID`, `schemas: ["public"]`, `verbose: true`. Confirm `leaderboard` appears with all 6 columns and the unique index. Then call `execute_sql` with:
 ```sql
+select get_rank('99999999-9999-9999-9999-999999999999');
 insert into leaderboard (player_id, username, best_score, best_distance, best_duration_ms)
 values ('00000000-0000-0000-0000-000000000001', 'smoketest', 100, 500, 30000);
 select get_rank('00000000-0000-0000-0000-000000000001');
 delete from leaderboard where player_id = '00000000-0000-0000-0000-000000000001';
 ```
-Expected: the `get_rank` select returns `1` (only row in the table). Then call `get_advisors` with `type: "security"` and confirm there's no "RLS disabled" finding for `leaderboard`.
+Expected: the first `get_rank` call (a player id with no row) returns `null` — this is the branch that actually matters, don't skip it. The second call (the just-inserted row) returns `1` (only row in the table). Then call `get_advisors` with `type: "security"` and confirm there's no "RLS disabled" finding for `leaderboard`.
 
 - [ ] **Step 6: Record connection details for later tasks**
 
