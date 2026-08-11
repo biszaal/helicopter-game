@@ -4,20 +4,24 @@
 
 **Goal:** Ship a Supabase-backed, all-time, unique-username, worldwide leaderboard for Cave Helicopter 1.0.1, with a basic server-side anti-cheat check on score submissions.
 
-**Architecture:** A single `leaderboard` table in a new dedicated Supabase project, readable directly by the client (RLS `SELECT`-only for `anon`), writable only through two Edge Functions (`claim-username`, `submit-score`) running with the service-role key — this is what makes server-side validation (profanity, plausibility) actually enforceable rather than advisory. The client is a thin `src/net/` layer; a device-generated UUID (no login) is the player's identity, paired with a globally-unique username claimed once.
+**Architecture:** A single `leaderboard` table in a new dedicated Supabase project, readable directly by the client (RLS `SELECT` for `anon` and `authenticated`), writable only through two Edge Functions (`claim-username`, `submit-score`) running with the service-role key — this is what makes server-side validation (profanity, plausibility) actually enforceable rather than advisory. The client is a thin `src/net/` layer; the player's identity is a **Supabase Anonymous Auth session** (`signInAnonymously()` — no visible login UI, no credentials, but a real, unforgeable per-device identity), paired with a globally-unique username claimed once.
 
-**Tech Stack:** Expo SDK 57 / React Native 0.86 / Reanimated 4.5 / Skia (existing). Supabase (`@supabase/supabase-js`) for Postgres + Edge Functions (Deno). `bad-words` for profanity filtering (client + server). `expo-crypto` for UUID generation. `react-native-url-polyfill` (required by supabase-js on RN/Hermes). Vitest for pure-logic tests (existing).
+**Tech Stack:** Expo SDK 57 / React Native 0.86 / Reanimated 4.5 / Skia (existing). Supabase (`@supabase/supabase-js`) for Postgres, Auth (anonymous sign-in), and Edge Functions (Deno). `bad-words` for profanity filtering (client + server). `react-native-url-polyfill` (required by supabase-js on RN/Hermes). Vitest for pure-logic tests (existing).
 
 ## Global Constraints
 
 - Spec: `docs/superpowers/specs/2026-08-11-leaderboard-design.md` — this plan implements it in full; deviations are called out explicitly in the relevant task.
-- Username: 3–16 chars, `[a-zA-Z0-9_]` only, globally unique (case-insensitive), no login — tied to a locally-generated `player_id` UUID that is lost on reinstall.
+- Username: 3–16 chars, `[a-zA-Z0-9_]` only, globally unique (case-insensitive), no login — tied to a Supabase Anonymous Auth user id (`auth.users.id`) that is lost on reinstall (a fresh anonymous session is created, with no way to reclaim the old one — same practical tradeoff the spec's "no login" decision already accepted, now backed by real auth instead of an ad-hoc client-generated UUID).
 - Leaderboard is **all-time only** — one row per player, `best_score` only ever increases.
-- Anti-cheat is a **plausibility bound**, not full replay verification: `maxScore(T) = 120 × 10 × 0.95 × (T/1000) × 1.05` (see Task 2 for where each constant comes from — they mirror `src/config.ts`'s `scoring.basePointsPerShu`, `graze.multiplierTiers`, `difficulty.scrollSpeed.cap`).
-- All writes to the `leaderboard` table go through Edge Functions using the service-role key. `anon` gets `SELECT` only — no RLS policy exists for `INSERT`/`UPDATE`/`DELETE`.
-- No local Supabase CLI/Docker is installed in this environment — provisioning and Edge Function deployment happen directly against a real, dedicated Supabase project via the Supabase MCP tools, not `supabase start`. Verification of Edge Functions is by `curl` against the deployed function URL.
+- Anti-cheat is a **plausibility bound**, not full replay verification: `maxScore(T) = 120 × 10 × 0.95 × (T/1000) × 1.05`, valid only for `T ≤ 3,600,000ms` (1 hour) — durations beyond that are rejected outright, not just bounded by the formula (see Task 2 for where each constant comes from — they mirror `src/config.ts`'s `scoring.basePointsPerShu`, `graze.multiplierTiers`, `difficulty.scrollSpeed.cap`).
+- All writes to the `leaderboard` table go through Edge Functions using the service-role key, and both functions derive `player_id` from the caller's verified Supabase Auth JWT (`supabase.auth.getUser(jwt)`) — **never** from a client-supplied `playerId` field. `anon`/`authenticated` get `SELECT` only on the table itself — no RLS policy exists for `INSERT`/`UPDATE`/`DELETE`.
+- No local Supabase CLI/Docker is installed in this environment — provisioning and Edge Function deployment happen directly against a real, dedicated Supabase project via the Supabase MCP tools, not `supabase start`. Verification of Edge Functions is by `curl` against the deployed function URL (curl tests now need a real anonymous-session JWT, not just the bare anon key — see Task 3's amendment for how to obtain one).
 - This is a v1.0.1 patch — out of scope: weekly/seasonal boards, full replay anti-cheat, account recovery after reinstall, Android.
 - A Privacy Policy URL becomes a hard requirement for App Store submission once this ships (see spec) — not part of this plan's tasks, flagged again in Task 10.
+
+## Amendment (post-Task-3, security review)
+
+Automated security review caught two real gaps in the ORIGINAL version of this plan (not implementer errors): both Edge Functions trusted a client-supplied `playerId` with zero authentication (anyone could rename or overwrite any other player's leaderboard entry with a crafted request), and `isPlausibleRun`'s score ceiling had no upper bound on `durationMs` (an absurd claimed run length made almost any score look plausible). The human chose to fix the identity issue properly via Supabase Anonymous Auth rather than accept the risk. Amending the plan in place (rather than leaving it describing a design that's no longer what's built) touches Tasks 1–6; each amended task below is marked **AMENDED** with the specific delta from the original text. Tasks 7–10 are unaffected — the client-facing interfaces they depend on (`useSettings().username`, `claimUsername()`, `submitScore()`) keep the same shapes.
 
 ---
 
@@ -133,6 +137,20 @@ Call `get_project_url` and `get_publishable_keys` with `project_id: PROJECT_ID`.
 git add supabase/migrations/20260811000000_leaderboard.sql
 git commit -m "feat: leaderboard schema (Supabase project, RLS, get_rank RPC)"
 ```
+
+- [ ] **AMENDED Step 8: grant `authenticated` the same public read access**
+
+Added after the security amendment (see plan header). Once a client has an anonymous auth session, its requests carry role `authenticated`, not `anon` — the original policy and grant, scoped to `anon` only, would make `fetchTop100`/`fetchOwnRank` (Task 6, direct client reads) silently fail with permission-denied once Task 5 lands. Create `supabase/migrations/20260811000001_grant_authenticated_read.sql`:
+```sql
+drop policy "public read" on leaderboard;
+create policy "public read" on leaderboard
+  for select
+  to anon, authenticated
+  using (true);
+
+grant execute on function get_rank(uuid) to authenticated;
+```
+Apply via `apply_migration` (`project_id: PROJECT_ID`, name `grant_authenticated_read`). Verify with `execute_sql`: `select has_table_privilege('authenticated', 'leaderboard', 'select');` → expect `true`. Commit the new migration file (`git add supabase/migrations/20260811000001_grant_authenticated_read.sql && git commit -m "fix: grant authenticated role read access to leaderboard (anon auth)"`).
 
 ---
 
@@ -396,6 +414,27 @@ git add package.json package-lock.json src/net/leaderboardRules.ts src/net/__tes
 git commit -m "feat: leaderboard username rules and score plausibility check"
 ```
 
+- [ ] **AMENDED Step 8: cap `durationMs` in `isPlausibleRun`**
+
+Added after the security amendment (see plan header) — the ceiling formulas scale linearly with `durationMs` and had no upper bound, so an absurd claimed duration made almost any score look plausible. In **both** `src/net/leaderboardRules.ts` and `supabase/functions/_shared/leaderboardRules.ts`, add a constant and one more guard clause:
+```ts
+/** Absolute ceiling on a claimed run length — generous (no real run gets
+ * anywhere close), exists purely to reject fabricated durations that would
+ * otherwise make the linear score/distance ceilings meaningless. */
+const MAX_DURATION_MS = 3_600_000; // 1 hour
+```
+Add `if (durationMs > MAX_DURATION_MS) return false;` to `isPlausibleRun`, right after the existing `if (score < 0 || distanceMeters < 0 || durationMs <= 0) return false;` line, in both files. Add one test to `src/net/__tests__/leaderboardRules.test.ts`'s `describe('isPlausibleRun', ...)` block:
+```ts
+  test('rejects a duration beyond the absolute ceiling even with an otherwise-plausible score', () => {
+    expect(isPlausibleRun(100, 100, 3_600_001)).toBe(false);
+  });
+```
+Run `npm test -- leaderboardRules`, confirm it passes, commit:
+```bash
+git add src/net/leaderboardRules.ts src/net/__tests__/leaderboardRules.test.ts supabase/functions/_shared/leaderboardRules.ts
+git commit -m "fix: cap claimed run duration in isPlausibleRun"
+```
+
 ---
 
 ### Task 3: Deploy the Edge Functions
@@ -627,12 +666,250 @@ git add supabase/functions/claim-username/index.ts supabase/functions/submit-sco
 git commit -m "feat: claim-username and submit-score Edge Functions"
 ```
 
+- [ ] **AMENDED Step 7: derive `player_id` from the caller's verified auth session, not the request body**
+
+Added after the security amendment (see plan header) — trusting `body.playerId` let anyone rename or overwrite any other player's row. Rewrite both functions in full:
+
+`supabase/functions/claim-username/index.ts`:
+```ts
+import { createClient } from 'npm:@supabase/supabase-js@2';
+import { isValidUsernameFormat, containsBlockedWord } from '../_shared/leaderboardRules.ts';
+
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL')!,
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+);
+
+Deno.serve(async (req) => {
+  const jwt = req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
+  if (!jwt) {
+    return Response.json({ ok: false, reason: 'invalid' }, { status: 401 });
+  }
+  const { data: authData, error: authError } = await supabase.auth.getUser(jwt);
+  if (authError || !authData.user) {
+    return Response.json({ ok: false, reason: 'invalid' }, { status: 401 });
+  }
+  const playerId = authData.user.id;
+
+  const body = await req.json().catch(() => null);
+  const username = body?.username;
+
+  if (typeof username !== 'string') {
+    return Response.json({ ok: false, reason: 'invalid' }, { status: 400 });
+  }
+  if (!isValidUsernameFormat(username)) {
+    return Response.json({ ok: false, reason: 'invalid' });
+  }
+  if (containsBlockedWord(username)) {
+    return Response.json({ ok: false, reason: 'profane' });
+  }
+
+  const { data: existing, error: selectError } = await supabase
+    .from('leaderboard')
+    .select('player_id')
+    .eq('player_id', playerId)
+    .maybeSingle();
+
+  if (selectError) {
+    return Response.json({ ok: false, reason: 'invalid' }, { status: 500 });
+  }
+
+  const { error: writeError } = existing
+    ? await supabase
+        .from('leaderboard')
+        .update({ username, updated_at: new Date().toISOString() })
+        .eq('player_id', playerId)
+    : await supabase.from('leaderboard').insert({
+        player_id: playerId,
+        username,
+        best_score: 0,
+        best_distance: 0,
+        best_duration_ms: 0,
+      });
+
+  if (writeError) {
+    if (writeError.code === '23505') {
+      return Response.json({ ok: false, reason: 'taken' });
+    }
+    return Response.json({ ok: false, reason: 'invalid' }, { status: 500 });
+  }
+
+  return Response.json({ ok: true });
+});
+```
+
+`supabase/functions/submit-score/index.ts`:
+```ts
+import { createClient } from 'npm:@supabase/supabase-js@2';
+import { isPlausibleRun } from '../_shared/leaderboardRules.ts';
+
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL')!,
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+);
+
+Deno.serve(async (req) => {
+  const jwt = req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
+  if (!jwt) {
+    return Response.json({ ok: false }, { status: 401 });
+  }
+  const { data: authData, error: authError } = await supabase.auth.getUser(jwt);
+  if (authError || !authData.user) {
+    return Response.json({ ok: false }, { status: 401 });
+  }
+  const playerId = authData.user.id;
+
+  const body = await req.json().catch(() => null);
+  const { score, distance, runDurationMs } = body ?? {};
+
+  if (
+    typeof score !== 'number' ||
+    typeof distance !== 'number' ||
+    typeof runDurationMs !== 'number'
+  ) {
+    return Response.json({ ok: false }, { status: 400 });
+  }
+  if (!isPlausibleRun(score, distance, runDurationMs)) {
+    return Response.json({ ok: false, reason: 'implausible' }, { status: 400 });
+  }
+
+  const { data: existing, error: selectError } = await supabase
+    .from('leaderboard')
+    .select('best_score')
+    .eq('player_id', playerId)
+    .maybeSingle();
+
+  if (selectError) {
+    return Response.json({ ok: false }, { status: 500 });
+  }
+  if (existing === null) {
+    return Response.json({ ok: false, reason: 'no_username' }, { status: 404 });
+  }
+  if (score <= existing.best_score) {
+    return Response.json({ ok: true, improved: false });
+  }
+
+  const { error: updateError } = await supabase
+    .from('leaderboard')
+    .update({
+      best_score: score,
+      best_distance: distance,
+      best_duration_ms: runDurationMs,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('player_id', playerId);
+
+  if (updateError) {
+    return Response.json({ ok: false }, { status: 500 });
+  }
+  return Response.json({ ok: true, improved: true });
+});
+```
+
+Redeploy both via `deploy_edge_function` (same shape as Step 3, current file contents, `verify_jwt: true` unchanged — that's a platform-level gate on having *any* valid Supabase JWT; the `auth.getUser(jwt)` call above is the new application-level check that the JWT belongs to a real signed-in user, which a bare anon-key JWT is not). Same `deploy_edge_function` quirk as Step 3: the tool's `files` array is bundled under its own internal `source/` directory, so the `_shared/leaderboardRules.ts` entry must be referenced as `./_shared/leaderboardRules.ts` in what you deploy — that's a property of the deploy call's file layout, not the committed `index.ts` files on disk, which correctly keep `../_shared/leaderboardRules.ts` (the real repo layout). This was flagged as undocumented in the Task 3 review — while you're touching both files now, add this as a one-line comment above the import in each committed `index.ts`:
+```ts
+// Deployed via the Supabase MCP deploy_edge_function tool, which nests
+// uploaded files under its own source/ dir — the deploy call's files array
+// must use './_shared/leaderboardRules.ts' even though this file (matching
+// the real repo layout) correctly imports '../_shared/leaderboardRules.ts'.
+```
+
+- [ ] **AMENDED Step 8: re-verify with real anonymous-session JWTs**
+
+The bare anon key is itself a valid JWT but isn't tied to a real user, so `auth.getUser()` correctly rejects it — meaning the original Step 4/5 curl commands (which just used `$ANON_KEY` as the bearer token for every call) no longer work and must not be reused as-is. Obtain two independent real anonymous sessions first (this also happens to be the first real exercise of anonymous sign-in against this project — confirms the human's dashboard toggle took effect):
+```bash
+cd /Users/bishalaryal/Documents/Github/helicopter
+npm install @supabase/supabase-js   # harmless if Task 4 later installs it again
+node -e "
+const { createClient } = require('@supabase/supabase-js');
+const supabase = createClient('$SUPABASE_URL', '$ANON_KEY');
+(async () => {
+  const a = await supabase.auth.signInAnonymously();
+  if (a.error) { console.error('PLAYER_A error:', a.error.message); process.exit(1); }
+  console.log('PLAYER_A_JWT=' + a.data.session.access_token);
+  const supabase2 = createClient('$SUPABASE_URL', '$ANON_KEY');
+  const b = await supabase2.auth.signInAnonymously();
+  if (b.error) { console.error('PLAYER_B error:', b.error.message); process.exit(1); }
+  console.log('PLAYER_B_JWT=' + b.data.session.access_token);
+})();
+"
+```
+(Two separate client instances for A and B — a single client's session would just be overwritten by the second sign-in, not create two independent identities.) Export the two printed tokens (`export PLAYER_A_JWT="..."`, `export PLAYER_B_JWT="..."`), then:
+```bash
+# valid claim, player A
+curl -s -X POST "$SUPABASE_URL/functions/v1/claim-username" \
+  -H "Authorization: Bearer $PLAYER_A_JWT" -H "Content-Type: application/json" \
+  -d '{"username":"TestPilot1"}'
+# expect: {"ok":true}
+
+# duplicate username, player B
+curl -s -X POST "$SUPABASE_URL/functions/v1/claim-username" \
+  -H "Authorization: Bearer $PLAYER_B_JWT" -H "Content-Type: application/json" \
+  -d '{"username":"TestPilot1"}'
+# expect: {"ok":false,"reason":"taken"}
+
+# profane name, player B
+curl -s -X POST "$SUPABASE_URL/functions/v1/claim-username" \
+  -H "Authorization: Bearer $PLAYER_B_JWT" -H "Content-Type: application/json" \
+  -d '{"username":"fuckface"}'
+# expect: {"ok":false,"reason":"profane"}
+
+# too short, player B
+curl -s -X POST "$SUPABASE_URL/functions/v1/claim-username" \
+  -H "Authorization: Bearer $PLAYER_B_JWT" -H "Content-Type: application/json" \
+  -d '{"username":"ab"}'
+# expect: {"ok":false,"reason":"invalid"}
+
+# no Authorization header at all
+curl -s -X POST "$SUPABASE_URL/functions/v1/claim-username" \
+  -H "Content-Type: application/json" -d '{"username":"NoAuth"}'
+# expect: {"ok":false,"reason":"invalid"} with a 401 status
+
+# plausible score, player A (the one who claimed TestPilot1)
+curl -s -X POST "$SUPABASE_URL/functions/v1/submit-score" \
+  -H "Authorization: Bearer $PLAYER_A_JWT" -H "Content-Type: application/json" \
+  -d '{"score":8000,"distance":6000,"runDurationMs":90000}'
+# expect: {"ok":true,"improved":true}
+
+# absurd score, same player/duration — should be rejected
+curl -s -X POST "$SUPABASE_URL/functions/v1/submit-score" \
+  -H "Authorization: Bearer $PLAYER_A_JWT" -H "Content-Type: application/json" \
+  -d '{"score":999999999,"distance":6000,"runDurationMs":90000}'
+# expect: {"ok":false,"reason":"implausible"}
+
+# duration beyond the new absolute cap — should be rejected
+curl -s -X POST "$SUPABASE_URL/functions/v1/submit-score" \
+  -H "Authorization: Bearer $PLAYER_A_JWT" -H "Content-Type: application/json" \
+  -d '{"score":100,"distance":100,"runDurationMs":3600001}'
+# expect: {"ok":false,"reason":"implausible"}
+
+# player B never claimed a username
+curl -s -X POST "$SUPABASE_URL/functions/v1/submit-score" \
+  -H "Authorization: Bearer $PLAYER_B_JWT" -H "Content-Type: application/json" \
+  -d '{"score":100,"distance":100,"runDurationMs":10000}'
+# expect: {"ok":false,"reason":"no_username"} with a 404 status
+```
+Clean up: the two anonymous auth users created for this test (and their leaderboard rows) should be deleted so they don't pollute the real board. Get their ids from the JWTs (decode the `sub` claim, or `select player_id from leaderboard where username = 'TestPilot1'`), then:
+```sql
+delete from leaderboard where username = 'TestPilot1';
+```
+Deleting the underlying `auth.users` rows isn't reachable via `execute_sql` (it's in the `auth` schema, not `public`) — leaving two harmless orphaned anonymous auth users is fine; note it in the report rather than fighting the tooling for it.
+
+- [ ] **AMENDED Step 9: commit**
+
+```bash
+git add supabase/functions/claim-username/index.ts supabase/functions/submit-score/index.ts package.json package-lock.json
+git commit -m "fix: derive player_id from verified auth session instead of request body"
+```
+
 ---
 
 ### Task 4: Client Supabase wiring
 
+**AMENDED** (see plan header): the client now needs a *persisted* Supabase Auth session (for anonymous sign-in), not a stateless client — `persistSession`/`autoRefreshToken` flip from `false` to `true`, backed by the existing `@react-native-async-storage/async-storage` dependency. `expo-crypto` is no longer needed (dropped from Task 5's original device-UUID approach — see Task 5's amendment) so it's removed from this task's install list. If Task 3's rework already ran `npm install @supabase/supabase-js` for its curl-verification script, Step 1 below is a no-op for that package — still run it, it's idempotent.
+
 **Files:**
-- Modify: `package.json` (add `@supabase/supabase-js`, `react-native-url-polyfill`, `expo-crypto`)
+- Modify: `package.json` (add `@supabase/supabase-js`, `react-native-url-polyfill`)
 - Create: `.env.example`
 - Modify: `.gitignore`
 - Create: `src/net/supabaseClient.ts`
@@ -643,7 +920,6 @@ git commit -m "feat: claim-username and submit-score Edge Functions"
 - [ ] **Step 1: Install dependencies**
 
 ```bash
-npx expo install expo-crypto
 npm install @supabase/supabase-js react-native-url-polyfill
 ```
 
@@ -679,6 +955,7 @@ Create `src/net/supabaseClient.ts`:
 
 ```ts
 import 'react-native-url-polyfill/auto';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -687,7 +964,13 @@ const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 let client: SupabaseClient | null = null;
 
 /** Lazily created singleton. The leaderboard is the only Supabase consumer,
- * so nothing pays for this until a caller actually needs it. */
+ * so nothing pays for this until a caller actually needs it.
+ *
+ * persistSession/autoRefreshToken are true — the player's identity is an
+ * anonymous Supabase Auth session (Task 5), which must survive app
+ * restarts the same way the old device-generated UUID did, and the
+ * Edge Functions verify this session's JWT server-side (Task 3), so it
+ * can't be left to expire silently mid-session. */
 export function getSupabase(): SupabaseClient {
   if (client === null) {
     if (!url || !anonKey) {
@@ -696,7 +979,12 @@ export function getSupabase(): SupabaseClient {
       );
     }
     client = createClient(url, anonKey, {
-      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      auth: {
+        storage: AsyncStorage,
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
+      },
     });
   }
   return client;
@@ -720,11 +1008,14 @@ git commit -m "feat: Supabase client wiring for the leaderboard"
 
 ### Task 5: Device player id
 
+**AMENDED** (see plan header): the original design was a bare client-generated UUID with no way to prove ownership server-side — an Edge Function had no way to tell a real request from a spoofed one. This is now a Supabase Anonymous Auth session (`signInAnonymously()`): still no visible login UI, still nothing the player types, but a real session Edge Functions can verify. Requires "Allow anonymous sign-ins" enabled in the Supabase dashboard for this project (already done by the human as of this amendment). Interface name/shape is unchanged (`getOrCreatePlayerId(): Promise<string>`) — Task 6 doesn't need to change how it *calls* this function, only what Task 6 does with the id (see Task 6's amendment).
+
 **Files:**
 - Create: `src/state/playerId.ts`
 - Test: `src/state/__tests__/playerId.test.ts`
 
 **Interfaces:**
+- Consumes: `getSupabase()` (Task 4).
 - Produces: `getOrCreatePlayerId(): Promise<string>` — used by Task 6.
 
 - [ ] **Step 1: Write the failing tests**
@@ -734,47 +1025,39 @@ Create `src/state/__tests__/playerId.test.ts`:
 ```ts
 import { describe, expect, test, vi, beforeEach } from 'vitest';
 
-const store = new Map<string, string>();
+const getSession = vi.fn();
+const signInAnonymously = vi.fn();
 
-vi.mock('@react-native-async-storage/async-storage', () => ({
-  default: {
-    getItem: (key: string) => Promise.resolve(store.get(key) ?? null),
-    setItem: (key: string, value: string) => {
-      store.set(key, value);
-      return Promise.resolve();
-    },
-  },
+vi.mock('../../net/supabaseClient', () => ({
+  getSupabase: () => ({ auth: { getSession, signInAnonymously } }),
 }));
 
-vi.mock('expo-crypto', () => ({
-  randomUUID: () => 'test-uuid-1234',
-}));
+import { getOrCreatePlayerId } from '../playerId';
 
 describe('getOrCreatePlayerId', () => {
   beforeEach(() => {
-    store.clear();
-    vi.resetModules();
+    getSession.mockReset();
+    signInAnonymously.mockReset();
   });
 
-  test('creates and persists an id on first call', async () => {
-    const { getOrCreatePlayerId } = await import('../playerId');
+  test('returns the existing session user id without signing in again', async () => {
+    getSession.mockResolvedValue({ data: { session: { user: { id: 'existing-user-id' } } } });
     const id = await getOrCreatePlayerId();
-    expect(id).toBe('test-uuid-1234');
-    expect(store.get('cave-heli:player-id-v1')).toBe('test-uuid-1234');
+    expect(id).toBe('existing-user-id');
+    expect(signInAnonymously).not.toHaveBeenCalled();
   });
 
-  test('returns the same id on a second call in the same session', async () => {
-    const { getOrCreatePlayerId } = await import('../playerId');
-    const first = await getOrCreatePlayerId();
-    const second = await getOrCreatePlayerId();
-    expect(second).toBe(first);
-  });
-
-  test('reads a previously persisted id instead of generating a new one', async () => {
-    store.set('cave-heli:player-id-v1', 'already-persisted-id');
-    const { getOrCreatePlayerId } = await import('../playerId');
+  test('signs in anonymously and returns the new user id when there is no session', async () => {
+    getSession.mockResolvedValue({ data: { session: null } });
+    signInAnonymously.mockResolvedValue({ data: { user: { id: 'new-anon-id' } }, error: null });
     const id = await getOrCreatePlayerId();
-    expect(id).toBe('already-persisted-id');
+    expect(id).toBe('new-anon-id');
+  });
+
+  test('throws if anonymous sign-in fails', async () => {
+    getSession.mockResolvedValue({ data: { session: null } });
+    signInAnonymously.mockResolvedValue({ data: { user: null }, error: new Error('boom') });
+    await expect(getOrCreatePlayerId()).rejects.toThrow('boom');
   });
 });
 ```
@@ -789,26 +1072,25 @@ Expected: FAIL — `src/state/playerId.ts` doesn't exist yet.
 Create `src/state/playerId.ts`:
 
 ```ts
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Crypto from 'expo-crypto';
+import { getSupabase } from '../net/supabaseClient';
 
-const STORAGE_KEY = 'cave-heli:player-id-v1';
-
-let cached: string | null = null;
-
-/** The device's stable leaderboard identity — generated once, persisted
- * forever until reinstall. There is no account to recover it with. */
+/** The device's stable leaderboard identity — a Supabase Anonymous Auth
+ * session. No visible login UI, nothing the player types; the session is
+ * persisted by the Supabase client itself (Task 4's AsyncStorage-backed
+ * config), not managed here. Lost on reinstall, same as the old
+ * device-UUID approach — there is no account to recover it with. */
 export async function getOrCreatePlayerId(): Promise<string> {
-  if (cached !== null) return cached;
-  const stored = await AsyncStorage.getItem(STORAGE_KEY);
-  if (stored !== null) {
-    cached = stored;
-    return stored;
+  const supabase = getSupabase();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (session !== null) return session.user.id;
+
+  const { data, error } = await supabase.auth.signInAnonymously();
+  if (error || data.user === null) {
+    throw error ?? new Error('Anonymous sign-in returned no user');
   }
-  const id = Crypto.randomUUID();
-  await AsyncStorage.setItem(STORAGE_KEY, id);
-  cached = id;
-  return id;
+  return data.user.id;
 }
 ```
 
@@ -821,12 +1103,14 @@ Expected: PASS, all three cases green.
 
 ```bash
 git add src/state/playerId.ts src/state/__tests__/playerId.test.ts
-git commit -m "feat: device-generated leaderboard player id"
+git commit -m "feat: anonymous-auth-backed leaderboard player id"
 ```
 
 ---
 
 ### Task 6: Leaderboard API client
+
+**AMENDED** (see plan header): `claimUsername`/`submitScore` no longer send `playerId` in the request body — the Edge Functions (Task 3's amendment) now derive it server-side from the caller's verified auth session, which `functions.invoke()` attaches automatically as the `Authorization` header once a session exists. Both functions still call `getOrCreatePlayerId()` first, purely to *guarantee* a session exists before invoking (signing in anonymously on first use) — they just don't forward its return value in the payload anymore. `fetchOwnRank()` is unaffected: it still needs its own id explicitly, to ask "what's *my* rank," which isn't a security-sensitive question on a publicly-readable board.
 
 **Files:**
 - Create: `src/net/leaderboardApi.ts`
@@ -864,11 +1148,11 @@ import { claimUsername, submitScore, fetchTop100, fetchOwnRank } from '../leader
 describe('claimUsername', () => {
   beforeEach(() => invoke.mockReset());
 
-  test('invokes claim-username with playerId and username', async () => {
+  test('ensures a session exists, then invokes claim-username with just the username', async () => {
     invoke.mockResolvedValue({ data: { ok: true }, error: null });
     const result = await claimUsername('SkyPilot');
     expect(invoke).toHaveBeenCalledWith('claim-username', {
-      body: { playerId: 'player-123', username: 'SkyPilot' },
+      body: { username: 'SkyPilot' },
     });
     expect(result).toEqual({ ok: true });
   });
@@ -877,11 +1161,11 @@ describe('claimUsername', () => {
 describe('submitScore', () => {
   beforeEach(() => invoke.mockReset());
 
-  test('invokes submit-score with the run summary', async () => {
+  test('ensures a session exists, then invokes submit-score with just the run summary', async () => {
     invoke.mockResolvedValue({ data: { ok: true, improved: true }, error: null });
     await submitScore(8000, 6000, 90000);
     expect(invoke).toHaveBeenCalledWith('submit-score', {
-      body: { playerId: 'player-123', score: 8000, distance: 6000, runDurationMs: 90000 },
+      body: { score: 8000, distance: 6000, runDurationMs: 90000 },
     });
   });
 });
@@ -935,9 +1219,9 @@ export type ClaimResult =
   | { ok: false; reason: 'taken' | 'invalid' | 'profane' };
 
 export async function claimUsername(username: string): Promise<ClaimResult> {
-  const playerId = await getOrCreatePlayerId();
+  await getOrCreatePlayerId(); // ensures an anonymous session exists to authenticate this call
   const { data, error } = await getSupabase().functions.invoke('claim-username', {
-    body: { playerId, username },
+    body: { username },
   });
   if (error) throw error;
   return data as ClaimResult;
@@ -948,9 +1232,9 @@ export async function submitScore(
   distanceMeters: number,
   runDurationMs: number,
 ): Promise<void> {
-  const playerId = await getOrCreatePlayerId();
+  await getOrCreatePlayerId(); // ensures an anonymous session exists to authenticate this call
   await getSupabase().functions.invoke('submit-score', {
-    body: { playerId, score, distance: distanceMeters, runDurationMs },
+    body: { score, distance: distanceMeters, runDurationMs },
   });
 }
 
@@ -1469,7 +1753,7 @@ npm test
 npx tsc --noEmit
 npx expo export --platform ios
 ```
-Expected: all tests pass (existing 50 + the new ones from Tasks 2, 5, 6), no type errors, and the export completes without bundler errors (confirms the new Supabase/net code and the `bad-words`/`expo-crypto`/`react-native-url-polyfill` dependencies all bundle cleanly).
+Expected: all tests pass (existing 50 + the new ones from Tasks 2, 5, 6), no type errors, and the export completes without bundler errors (confirms the new Supabase/net code and the `bad-words`/`react-native-url-polyfill` dependencies all bundle cleanly).
 
 - [ ] **Step 3: Commit**
 
