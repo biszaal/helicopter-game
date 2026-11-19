@@ -1,10 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { isValidUsernameFormat } from '../net/leaderboardRules';
 import {
   claimUsername,
   fetchOwnRank,
   fetchTop100,
+  syncBestScore,
   type LeaderboardEntry,
 } from '../net/leaderboardApi';
 import { useSettings } from '../state/settings';
@@ -16,34 +24,42 @@ interface LeaderboardScreenProps {
 }
 
 export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
-  const { username, setUsername } = useSettings();
+  const { username, setUsername, bestScore, bestDistance } = useSettings();
   const [claiming, setClaiming] = useState(username === null);
   const [draftName, setDraftName] = useState('');
   const [claimError, setClaimError] = useState<string | null>(null);
+  /** A claim request is in flight — spinner on CLAIM, repeat taps ignored. */
+  const [submitting, setSubmitting] = useState(false);
   const [entries, setEntries] = useState<LeaderboardEntry[] | null>(null);
   const [ownRank, setOwnRank] = useState<number | null>(null);
   const [loadError, setLoadError] = useState(false);
 
   const load = useCallback(() => {
     setLoadError(false);
-    Promise.all([fetchTop100(), fetchOwnRank()])
+    // Sync first so the board includes this device's best (see
+    // syncBestScore). A failed sync must never block showing the board.
+    syncBestScore(bestScore, bestDistance)
+      .catch(() => {})
+      .then(() => Promise.all([fetchTop100(), fetchOwnRank()]))
       .then(([top, rank]) => {
         setEntries(top);
         setOwnRank(rank);
       })
       .catch(() => setLoadError(true));
-  }, []);
+  }, [bestScore, bestDistance]);
 
   useEffect(() => {
     if (!claiming) load();
   }, [claiming, load]);
 
   const handleClaim = () => {
+    if (submitting) return;
     if (!isValidUsernameFormat(draftName)) {
       setClaimError('3-16 letters, numbers, or _');
       return;
     }
     setClaimError(null);
+    setSubmitting(true);
     claimUsername(draftName)
       .then((result) => {
         if (!result.ok) {
@@ -59,7 +75,8 @@ export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
         setUsername(draftName);
         setClaiming(false);
       })
-      .catch(() => setClaimError('Network error — try again'));
+      .catch(() => setClaimError('Network error — try again'))
+      .finally(() => setSubmitting(false));
   };
 
   if (claiming) {
@@ -88,8 +105,9 @@ export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
             maxLength={16}
             returnKeyType="done"
             onSubmitEditing={handleClaim}
+            editable={!submitting}
           />
-          <GameButton label="CLAIM" onPress={handleClaim} />
+          <GameButton label="CLAIM" onPress={handleClaim} loading={submitting} />
         </View>
         {claimError !== null && <Text style={styles.error}>{claimError}</Text>}
       </View>
@@ -102,7 +120,9 @@ export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
       {loadError && (
         <Text style={styles.error}>Couldn't load — check your connection</Text>
       )}
-      {entries === null && !loadError && <Text style={styles.hint}>Loading…</Text>}
+      {entries === null && !loadError && (
+        <ActivityIndicator style={styles.spinner} color={theme.colors.amber} />
+      )}
       {entries !== null && (
         <ScrollView style={styles.list}>
           {entries.map((entry, i) => (
@@ -144,11 +164,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 8,
   },
-  hint: {
-    color: '#8a94a3',
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: 24,
+  spinner: {
+    marginTop: 32,
   },
   error: {
     color: theme.colors.amber,

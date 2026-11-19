@@ -23,6 +23,23 @@ export function rampAt(d: number, ramp: Ramp): number {
   return ramp.perShu >= 0 ? Math.min(v, ramp.cap) : Math.max(v, ramp.cap);
 }
 
+/**
+ * How long a run takes to reach `meters`. Scroll speed depends only on
+ * distance (rampAt), never on the player, so this is exact: the integral of
+ * 1/speed over distance — logarithmic while the linear ramp climbs, then
+ * constant at the cap. It lets the client send a real duration alongside a
+ * saved best score, which never stored its own (leaderboard sync).
+ */
+export function runDurationMsForDistance(meters: number): number {
+  const { start, perShu, cap } = config.difficulty.scrollSpeed;
+  const shu = meters / config.scoring.metersPerShu;
+  const rampEndShu = (cap - start) / perShu; // where speed reaches its cap
+  const rampShu = Math.min(shu, rampEndShu);
+  const rampSeconds = Math.log((start + perShu * rampShu) / start) / perShu;
+  const capSeconds = Math.max(0, shu - rampEndShu) / cap;
+  return (rampSeconds + capSeconds) * 1000;
+}
+
 /** Which zone (index into config.zones) a run at this distance is in. */
 export function zoneIndexAt(distanceShu: number): number {
   'worklet';

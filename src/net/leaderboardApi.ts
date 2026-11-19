@@ -1,4 +1,5 @@
 import { getSupabase } from './supabaseClient';
+import { runDurationMsForDistance } from '../engine/spawning';
 import { getOrCreatePlayerId } from '../state/playerId';
 
 export interface LeaderboardEntry {
@@ -28,6 +29,26 @@ export async function submitScore(
   await getSupabase().functions.invoke('submit-score', {
     body: { score, distance: distanceMeters, runDurationMs },
   });
+}
+
+/**
+ * Makes sure the server holds the best score saved on this device. Runs
+ * only submit live when they beat the LOCAL best, so a best set before the
+ * player claimed a name (or one whose submit failed offline) would never
+ * reach the board. The server keeps whichever score is higher, so this is
+ * safe to call repeatedly. The best's own duration was never stored, but
+ * run time is a pure function of distance (runDurationMsForDistance).
+ */
+export async function syncBestScore(
+  bestScore: number,
+  bestDistanceMeters: number,
+): Promise<void> {
+  if (bestScore <= 0 || bestDistanceMeters <= 0) return;
+  await submitScore(
+    bestScore,
+    bestDistanceMeters,
+    runDurationMsForDistance(bestDistanceMeters),
+  );
 }
 
 export async function fetchTop100(): Promise<LeaderboardEntry[]> {

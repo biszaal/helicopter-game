@@ -12,7 +12,35 @@ vi.mock('../../state/playerId', () => ({
   getOrCreatePlayerId: () => Promise.resolve('player-123'),
 }));
 
-import { claimUsername, submitScore, fetchTop100, fetchOwnRank } from '../leaderboardApi';
+import {
+  claimUsername,
+  submitScore,
+  syncBestScore,
+  fetchTop100,
+  fetchOwnRank,
+} from '../leaderboardApi';
+import { runDurationMsForDistance } from '../../engine/spawning';
+
+describe('syncBestScore', () => {
+  beforeEach(() => invoke.mockReset());
+
+  test('submits the saved best with the duration its distance takes', async () => {
+    invoke.mockResolvedValue({ data: { ok: true, improved: true }, error: null });
+    await syncBestScore(16715, 10656);
+    expect(invoke).toHaveBeenCalledWith('submit-score', {
+      body: {
+        score: 16715,
+        distance: 10656,
+        runDurationMs: runDurationMsForDistance(10656),
+      },
+    });
+  });
+
+  test('does nothing when there is no saved best yet', async () => {
+    await syncBestScore(0, 0);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
 
 describe('claimUsername', () => {
   beforeEach(() => invoke.mockReset());

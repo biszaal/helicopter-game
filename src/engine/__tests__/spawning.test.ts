@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'vitest';
+import { config } from '../../config';
+import { isPlausibleRun } from '../../net/leaderboardRules';
 import {
   doublePinchCentres,
   placeWallGap,
@@ -8,9 +10,44 @@ import {
   pinchEntryX,
   placeRock,
   rampAt,
+  runDurationMsForDistance,
   sizeScaleAt,
   zoneIndexAt,
 } from '../spawning';
+
+describe('runDurationMsForDistance', () => {
+  // Reference: the engine's own fixed-step loop (useGameLoop) — speed from
+  // rampAt(scroll), then scroll += speed·dt and time += dt at physicsHz.
+  const simulateMs = (meters: number) => {
+    const target = meters / config.scoring.metersPerShu;
+    const dt = 1 / config.engine.physicsHz;
+    let scroll = 0;
+    let t = 0;
+    while (scroll < target) {
+      scroll += rampAt(scroll, config.difficulty.scrollSpeed) * dt;
+      t += dt;
+    }
+    return t * 1000;
+  };
+
+  test.each([0, 500, 4999, 5000, 10656, 25000])(
+    'matches the engine loop at %i m (within 50 ms)',
+    (meters) => {
+      expect(runDurationMsForDistance(meters)).toBeCloseTo(simulateMs(meters), -2);
+    },
+  );
+
+  test('a max-multiplier run at that duration passes the server plausibility check', () => {
+    const maxMultiplier = Math.max(...config.graze.multiplierTiers);
+    for (const meters of [1, 1000, 10656, 40000]) {
+      const shu = meters / config.scoring.metersPerShu;
+      const maxScore = config.scoring.basePointsPerShu * maxMultiplier * shu;
+      expect(isPlausibleRun(maxScore, meters, runDurationMsForDistance(meters))).toBe(
+        true,
+      );
+    }
+  });
+});
 
 describe('rampAt', () => {
   const up = { start: 0.55, perShu: 0.008, cap: 0.95 };
