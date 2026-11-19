@@ -8,6 +8,7 @@ import {
 } from '@shopify/react-native-skia';
 import { useEffect, useMemo, useState } from 'react';
 import {
+  BackHandler,
   Platform,
   StyleSheet,
   Text,
@@ -149,6 +150,20 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
     startRotor();
     return stopRotor;
   }, []);
+
+  // Android back button: a live run pauses; from the pause or game-over
+  // overlay it leaves to the menu. It never resumes — a back press must not
+  // drop the player straight back into the rocks. pauseGame only reads the
+  // stable `phase` shared value, so the listener can't go stale.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (phase.value === PHASE_PLAYING) pauseGame();
+      else onExitToMenu();
+      return true;
+    });
+    return () => sub.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, onExitToMenu]);
 
   const handleDeath = (finalScore: number, distance: number, runDurationMs: number) => {
     const coins = Math.floor(finalScore / config.coins.pointsPerCoin);

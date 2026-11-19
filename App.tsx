@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { BackHandler, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initAudio } from './src/audio/sounds';
 import { GameScreen } from './src/render/GameScreen';
@@ -24,6 +24,18 @@ function Root() {
   useEffect(() => {
     initAudio();
   }, []);
+
+  // Android back button: sub-screens return to the menu. The game screen
+  // handles its own back press (pause first), and on the menu the default
+  // (leave the app) is what players expect.
+  useEffect(() => {
+    if (screen === 'menu' || screen === 'game') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setScreen('menu');
+      return true;
+    });
+    return () => sub.remove();
+  }, [screen]);
 
   let current;
   switch (screen) {

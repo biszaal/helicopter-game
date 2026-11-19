@@ -20,6 +20,7 @@
       }
     },
     "android": {
+      "package": "com.biszaal.helicopter",
       "adaptiveIcon": {
         "backgroundColor": "#14181f",
         "foregroundImage": "./assets/android-icon-foreground.png",
