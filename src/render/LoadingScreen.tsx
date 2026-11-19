@@ -20,6 +20,7 @@ import {
   MENU_HELI_Y,
 } from './MenuScreen';
 import { getSkin, theme } from './theme';
+import { useColumnFit } from './useColumnFit';
 
 interface LoadingScreenProps {
   /** Flips true when persisted settings have loaded — the real "done". */
@@ -37,6 +38,7 @@ interface LoadingScreenProps {
  */
 export function LoadingScreen({ hydrated, onDone }: LoadingScreenProps) {
   const { width, height } = useWindowDimensions();
+  const fit = useColumnFit(height);
   const { bestScore, bestDistance, totalCoins, selectedSkin } = useSettings();
   const mountedAtMs = useRef(Date.now());
 
@@ -108,23 +110,34 @@ export function LoadingScreen({ hydrated, onDone }: LoadingScreenProps) {
         />
       </Canvas>
       <View style={styles.content} pointerEvents="none">
-        <View style={styles.titleBlock}>
-          <Text style={styles.titleTop}>CAVE</Text>
-          <Text style={styles.titleBottom}>HELICOPTER</Text>
-          {bestScore > 0 && (
-            <Text style={styles.best}>
-              BEST {bestScore} · {bestDistance} m
-            </Text>
-          )}
-          {totalCoins > 0 && (
-            <Text style={styles.coins}>● {totalCoins} COINS</Text>
-          )}
-        </View>
-        <View style={styles.actionArea}>
-          <View style={styles.barTrack}>
-            <Animated.View style={[styles.barFill, barFillStyle]} />
+        <View
+          onLayout={fit.onLayout}
+          style={[
+            styles.column,
+            {
+              transform: [{ scale: fit.scale }],
+              opacity: fit.measured ? 1 : 0,
+            },
+          ]}
+        >
+          <View style={styles.titleBlock}>
+            <Text style={styles.titleTop}>CAVE</Text>
+            <Text style={styles.titleBottom}>HELICOPTER</Text>
+            {bestScore > 0 && (
+              <Text style={styles.best}>
+                BEST {bestScore} · {bestDistance} m
+              </Text>
+            )}
+            {totalCoins > 0 && (
+              <Text style={styles.coins}>● {totalCoins} COINS</Text>
+            )}
           </View>
-          <Text style={styles.loadingLabel}>SPOOLING UP</Text>
+          <View style={styles.actionArea}>
+            <View style={styles.barTrack}>
+              <Animated.View style={[styles.barFill, barFillStyle]} />
+            </View>
+            <Text style={styles.loadingLabel}>SPOOLING UP</Text>
+          </View>
         </View>
       </View>
     </Animated.View>
@@ -147,7 +160,13 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'center',
     paddingRight: 64,
+  },
+  /** Same scaled column as MenuScreen (useColumnFit), so the boot
+   * crossfade lines up on short screens too. */
+  column: {
+    alignItems: 'flex-end',
     gap: 28,
+    transformOrigin: 'right center',
   },
   titleBlock: {
     alignItems: 'flex-end',

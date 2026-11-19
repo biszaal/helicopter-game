@@ -64,25 +64,34 @@ export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
 
   if (claiming) {
     return (
+      // Landscape keyboard leaves ~210 pt on a phone, so everything sits in
+      // the top band: BACK in the corner, input and CLAIM on one row.
       <View style={styles.root}>
+        <View style={styles.backCorner}>
+          <GameButton
+            label="BACK"
+            variant="secondary"
+            compact
+            onPress={onBack}
+          />
+        </View>
         <Text style={styles.title}>PICK A NAME</Text>
-        <TextInput
-          style={styles.input}
-          value={draftName}
-          onChangeText={setDraftName}
-          placeholder="username"
-          placeholderTextColor="rgba(220, 227, 236, 0.35)"
-          autoCapitalize="none"
-          autoCorrect={false}
-          maxLength={16}
-        />
-        {claimError !== null && <Text style={styles.error}>{claimError}</Text>}
-        <View style={styles.claimButton}>
+        <View style={styles.claimRow}>
+          <TextInput
+            style={styles.input}
+            value={draftName}
+            onChangeText={setDraftName}
+            placeholder="username"
+            placeholderTextColor="rgba(220, 227, 236, 0.35)"
+            autoCapitalize="none"
+            autoCorrect={false}
+            maxLength={16}
+            returnKeyType="done"
+            onSubmitEditing={handleClaim}
+          />
           <GameButton label="CLAIM" onPress={handleClaim} />
         </View>
-        <View style={styles.footer}>
-          <GameButton label="BACK" variant="secondary" onPress={onBack} />
-        </View>
+        {claimError !== null && <Text style={styles.error}>{claimError}</Text>}
       </View>
     );
   }
@@ -149,8 +158,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 32,
   },
+  /** Clear of the landscape notch, level with the title. */
+  backCorner: {
+    position: 'absolute',
+    top: 22,
+    left: 64,
+  },
+  claimRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginTop: 24,
+  },
   input: {
-    marginTop: 28,
     width: 240,
     borderWidth: 1.5,
     borderColor: 'rgba(255, 182, 72, 0.4)',
@@ -162,9 +182,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1,
     textAlign: 'center',
-  },
-  claimButton: {
-    marginTop: 20,
   },
   list: {
     flex: 1,

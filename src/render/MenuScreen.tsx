@@ -11,6 +11,7 @@ import { Background } from './Background';
 import { GameButton } from './GameButton';
 import { Helicopter } from './Helicopter';
 import { getSkin, theme } from './theme';
+import { useColumnFit } from './useColumnFit';
 
 interface MenuScreenProps {
   onPlay: () => void;
@@ -42,6 +43,7 @@ export function MenuScreen({
 }: MenuScreenProps) {
   const { width, height } = useWindowDimensions();
   const { bestScore, bestDistance, totalCoins, selectedSkin } = useSettings();
+  const fit = useColumnFit(height);
 
   const clockMs = useSharedValue(0);
   useFrameCallback((frame) => {
@@ -81,27 +83,39 @@ export function MenuScreen({
         />
       </Canvas>
       <View style={styles.content} pointerEvents="box-none">
-        <View style={styles.titleBlock}>
-          <Text style={styles.titleTop}>CAVE</Text>
-          <Text style={styles.titleBottom}>HELICOPTER</Text>
-          {bestScore > 0 && (
-            <Text style={styles.best}>
-              BEST {bestScore} · {bestDistance} m
-            </Text>
-          )}
-          {totalCoins > 0 && (
-            <Text style={styles.coins}>● {totalCoins} COINS</Text>
-          )}
-        </View>
-        <View style={styles.actionArea}>
-          <GameButton label="PLAY" onPress={onPlay} />
-          <GameButton label="SHOP" variant="secondary" onPress={onShop} />
-          <GameButton
-            label="LEADERBOARD"
-            variant="secondary"
-            onPress={onLeaderboard}
-          />
-          <GameButton label="SETTINGS" variant="secondary" onPress={onSettings} />
+        <View
+          onLayout={fit.onLayout}
+          pointerEvents="box-none"
+          style={[
+            styles.column,
+            {
+              transform: [{ scale: fit.scale }],
+              opacity: fit.measured ? 1 : 0,
+            },
+          ]}
+        >
+          <View style={styles.titleBlock}>
+            <Text style={styles.titleTop}>CAVE</Text>
+            <Text style={styles.titleBottom}>HELICOPTER</Text>
+            {bestScore > 0 && (
+              <Text style={styles.best}>
+                BEST {bestScore} · {bestDistance} m
+              </Text>
+            )}
+            {totalCoins > 0 && (
+              <Text style={styles.coins}>● {totalCoins} COINS</Text>
+            )}
+          </View>
+          <View style={styles.actionArea}>
+            <GameButton label="PLAY" onPress={onPlay} />
+            <GameButton label="SHOP" variant="secondary" onPress={onShop} />
+            <GameButton
+              label="LEADERBOARD"
+              variant="secondary"
+              onPress={onLeaderboard}
+            />
+            <GameButton label="SETTINGS" variant="secondary" onPress={onSettings} />
+          </View>
         </View>
       </View>
     </View>
@@ -120,7 +134,13 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'center',
     paddingRight: 64,
+  },
+  /** Title + action area, scaled as one unit by useColumnFit. Anchored on
+   * its right edge so shrinking keeps it flush with the notch padding. */
+  column: {
+    alignItems: 'flex-end',
     gap: 28,
+    transformOrigin: 'right center',
   },
   titleBlock: {
     alignItems: 'flex-end',
@@ -157,7 +177,9 @@ const styles = StyleSheet.create({
   actionArea: {
     height: 260,
     gap: 14,
-    alignItems: 'flex-end',
+    // Stretch: every button takes the widest label's width (LEADERBOARD
+    // outgrows the 220 min width), so the stack reads as one column.
+    alignItems: 'stretch',
     justifyContent: 'flex-start',
   },
 });
