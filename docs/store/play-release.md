@@ -113,6 +113,16 @@ crash logs. Supabase hosts the data for us, which Play does not count as sharing
 Cave Helicopter's first release on Android. Fly a helicopter through a cave that keeps closing in, graze the rocks for up to ×10 points, unlock six helicopters, and take on the worldwide leaderboard.
 ```
 
+## Permissions
+
+The app needs only INTERNET, VIBRATE and MODIFY_AUDIO_SETTINGS (plus network state and wake
+lock from libraries). `app.json` removes everything else with expo-audio's
+`recordAudioAndroid: false` and `android.blockedPermissions` (RECORD_AUDIO,
+SYSTEM_ALERT_WINDOW, READ/WRITE_EXTERNAL_STORAGE, DUMP). **versionCode 3, the first internal
+build, predates that change and still requests them.** Ship production from versionCode 4 or
+later. Check a bundle with
+`unzip -p app.aab base/manifest/AndroidManifest.xml | strings | grep permission`.
+
 ## Before promoting to production
 
 - [ ] Played on a real Android phone from the internal track: a run to The Drift, the
