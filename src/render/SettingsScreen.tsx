@@ -1,7 +1,12 @@
-import { StyleSheet, Switch, Text, View } from 'react-native';
+import { Linking, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSettings } from '../state/settings';
 import { GameButton } from './GameButton';
 import { theme } from './theme';
+
+/** Google Play requires an in-app route to request deletion of server-side
+ * data; a link to this web page satisfies it. The page covers the one thing
+ * the game stores off-device, the optional leaderboard entry. */
+const DELETE_DATA_URL = 'https://www.biszaaltech.com/games/helicopter/delete-account';
 
 interface SettingsScreenProps {
   onBack: () => void;
@@ -55,6 +60,17 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
             onPress={resetBest}
           />
         </View>
+        <View style={styles.row}>
+          <Text style={styles.rowLabel}>Delete my leaderboard data</Text>
+          <GameButton
+            label="OPEN"
+            variant="secondary"
+            compact
+            onPress={() => {
+              Linking.openURL(DELETE_DATA_URL).catch(() => {});
+            }}
+          />
+        </View>
       </View>
       <View style={styles.footer}>
         <GameButton label="BACK" variant="secondary" onPress={onBack} />
@@ -69,7 +85,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.backgroundTop,
     // Fixed paddings: percentages resolve against the parent's WIDTH in RN,
     // which blew out into a giant blank band once the app went landscape.
-    paddingTop: 26,
+    paddingTop: 18,
     paddingBottom: 14,
     paddingHorizontal: 28,
     alignItems: 'center',
@@ -80,10 +96,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 8,
     textAlign: 'center',
-    marginBottom: 28,
+    marginBottom: 14,
   },
   rows: {
-    gap: 22,
+    // Tight enough that every row plus BACK fits a ~393 pt landscape phone,
+    // even with Android's taller (48 dp) switch rows.
+    gap: 12,
     width: '100%',
     // Landscape: keep the rows a readable width instead of stretching the
     // labels and switches to opposite edges of the screen.

@@ -46,3 +46,6 @@ yarn-error.*
 
 # superpowers subagent-driven-development scratch workspace
 .superpowers/
+
+# Playwright MCP browser logs and snapshots
+.playwright-mcp/
