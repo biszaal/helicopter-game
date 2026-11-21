@@ -103,7 +103,7 @@ export function MenuScreen({
               </Text>
             )}
             {totalCoins > 0 && (
-              <Text style={styles.coins}>● {totalCoins} COINS</Text>
+              <Text style={styles.coins}>● {totalCoins} {totalCoins === 1 ? 'COIN' : 'COINS'}</Text>
             )}
           </View>
           <View style={styles.actionArea}>

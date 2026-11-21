@@ -471,7 +471,7 @@ export function GameScreen({ onExitToMenu }: GameScreenProps) {
             <Text style={styles.overlayScore}>{gameOver.score}</Text>
             <Text style={styles.overlayDistance}>{gameOver.distance} m</Text>
             {gameOver.coins > 0 && (
-              <Text style={styles.overlayCoins}>+{gameOver.coins} COINS</Text>
+              <Text style={styles.overlayCoins}>+{gameOver.coins} {gameOver.coins === 1 ? 'COIN' : 'COINS'}</Text>
             )}
             <Text style={styles.overlayHint}>TAP TO RETRY</Text>
             <View style={styles.overlayMenuButton}>
