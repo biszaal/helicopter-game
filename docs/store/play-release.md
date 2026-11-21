@@ -118,10 +118,23 @@ Cave Helicopter's first release on Android. Fly a helicopter through a cave that
 The app needs only INTERNET, VIBRATE and MODIFY_AUDIO_SETTINGS (plus network state and wake
 lock from libraries). `app.json` removes everything else with expo-audio's
 `recordAudioAndroid: false` and `android.blockedPermissions` (RECORD_AUDIO,
-SYSTEM_ALERT_WINDOW, READ/WRITE_EXTERNAL_STORAGE, DUMP). **versionCode 3, the first internal
-build, predates that change and still requests them.** Ship production from versionCode 4 or
-later. Check a bundle with
-`unzip -p app.aab base/manifest/AndroidManifest.xml | strings | grep permission`.
+SYSTEM_ALERT_WINDOW, READ/WRITE_EXTERNAL_STORAGE). **versionCode 3, the first internal
+build, predates that change and still requests them.** versionCode 4 is clean. Check a bundle
+with `unzip -p app.aab base/manifest/AndroidManifest.xml | strings | grep permission`.
+`android.permission.DUMP` still shows up in that output, and that is expected: it is the
+`android:permission` that guards AndroidX's `ProfileInstallReceiver`, not a permission the
+app requests.
+
+## Production submission (21 Nov 2026)
+
+- versionCode 4 (1.0.1) sent to Production, full rollout, all 177 countries plus rest of world,
+  together with the store listing and every App content declaration (12 changes). Managed
+  publishing is off, so it goes live as soon as Google approves it.
+- Play's pre-review check flagged `android.hardware.screen.landscape` as a required feature
+  (from the landscape orientation lock). It was ignored, with the reason given: the game only
+  runs in landscape, so the requirement is correct.
+- Form factors: Play opted the app into Google Play Games on PC by default, and that was left
+  on.
 
 ## Before promoting to production
 
