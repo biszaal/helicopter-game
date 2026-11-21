@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,6 +16,7 @@ import {
 } from '../net/leaderboardApi';
 import { useSettings } from '../state/settings';
 import { GameButton } from './GameButton';
+import { LeaderboardSkeleton } from './LeaderboardSkeleton';
 import { theme } from './theme';
 
 interface LeaderboardScreenProps {
@@ -121,7 +121,7 @@ export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
         <Text style={styles.error}>Couldn't load — check your connection</Text>
       )}
       {entries === null && !loadError && (
-        <ActivityIndicator style={styles.spinner} color={theme.colors.amber} />
+        <LeaderboardSkeleton />
       )}
       {entries !== null && (
         <ScrollView style={styles.list}>
@@ -163,9 +163,6 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '800',
     letterSpacing: 8,
-  },
-  spinner: {
-    marginTop: 32,
   },
   error: {
     color: theme.colors.amber,
