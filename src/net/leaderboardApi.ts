@@ -27,7 +27,10 @@ export async function submitScore(
 ): Promise<void> {
   await getOrCreatePlayerId(); // ensures an anonymous session exists to authenticate this call
   await getSupabase().functions.invoke('submit-score', {
-    body: { score, distance: distanceMeters, runDurationMs },
+    // best_duration_ms is an integer column: a fractional duration (as
+    // syncBestScore's computed one is) makes the whole write fail. Rounded
+    // up so the server's plausibility ceiling only ever gets more lenient.
+    body: { score, distance: distanceMeters, runDurationMs: Math.ceil(runDurationMs) },
   });
 }
 

@@ -31,9 +31,13 @@ describe('syncBestScore', () => {
       body: {
         score: 16715,
         distance: 10656,
-        runDurationMs: runDurationMsForDistance(10656),
+        // Rounded up: best_duration_ms is an integer column, and the exact
+        // 127854.805… ms made Postgres reject every sync (2026-11-20).
+        runDurationMs: Math.ceil(runDurationMsForDistance(10656)),
       },
     });
+    const { runDurationMs } = invoke.mock.calls[0][1].body;
+    expect(Number.isInteger(runDurationMs)).toBe(true);
   });
 
   test('does nothing when there is no saved best yet', async () => {

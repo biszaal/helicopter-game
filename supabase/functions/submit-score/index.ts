@@ -31,7 +31,13 @@ Deno.serve(async (req) => {
   ) {
     return Response.json({ ok: false }, { status: 400 });
   }
-  if (!isPlausibleRun(score, distance, runDurationMs)) {
+  // best_duration_ms is an integer column. App builds 1.0.1 (iOS 11, Android
+  // 4) send a fractional duration when syncing a saved best, which made the
+  // UPDATE fail with a 500 and left those players at 0. Rounded up here so
+  // already-shipped clients work, and so the plausibility ceiling only ever
+  // gets more lenient by under 1 ms.
+  const durationMs = Math.ceil(runDurationMs);
+  if (!isPlausibleRun(score, distance, durationMs)) {
     return Response.json({ ok: false, reason: 'implausible' }, { status: 400 });
   }
 
@@ -57,7 +63,7 @@ Deno.serve(async (req) => {
     .update({
       best_score: score,
       best_distance: distance,
-      best_duration_ms: runDurationMs,
+      best_duration_ms: durationMs,
       updated_at: new Date().toISOString(),
     })
     .eq('player_id', playerId);
